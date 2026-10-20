@@ -42,7 +42,9 @@ example, desired over have, IV pump rates, gravity drips, infusion time, weight-
 reconstitution, heparin, titrations and BSA. There's a table of conversions, and a card with your own rounding rules,
 which follows your settings, so if you switch pump rates to whole numbers the sheet says so too. Then the blood gas
 cards: the normal ranges, reading an ABG (the five steps, tic-tac-toe and ROME), Henderson-Hasselbalch, expected
-compensation, the anion gap, oxygenation and the P/F ratio, and the plain words for patients.
+compensation, the anion gap, oxygenation and the P/F ratio, and the plain words for patients. Next to each blood
+gas formula there's a short memory hook in handwriting, like "one and a half bicarb plus eight, give or take two",
+and each one links to its card in [Memorizing blood gases](memorize.md).
 
 ![The formula sheet](images/formula-sheet.png)
 *The whole formula sheet.*

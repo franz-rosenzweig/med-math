@@ -6,7 +6,9 @@ import { drawFigure } from './abgview.js';
 import { judge } from './answer.js';
 import { drawTrain } from './trainview.js';
 import { fmt, fmtClock, fmtDuration } from './fmt.js';
-import { loadSettings, saveSettings, loadProgress, record, resetProgress, storageWorks } from './store.js';
+import { loadSettings, saveSettings, loadProgress, record, resetProgress, storageWorks, loadMemo, saveMemo, resetMemo } from './store.js';
+import { showMemorize, memoEntryHTML, speedKey, cardKey } from './memoui.js';
+import { TRICK } from './memo.js';
 import { ruleText } from './rules.js';
 import { Q } from './frac.js';
 
@@ -15,6 +17,7 @@ const TOPIC_IDS = TOPICS.map((t) => t.id);
 const state = {
   settings: loadSettings(TOPIC_IDS),
   progress: loadProgress(),
+  memo: loadMemo(),
   storage: storageWorks(),
   practice: null,
   quiz: null,
@@ -49,6 +52,7 @@ const ICONS = {
   next: '<path d="M5 12h13M13 6l6 6-6 6"/>',
   train: '<path d="M4 15V8h9v7M13 11h5l2 4H4"/><path d="M6 8V5h3v3"/><circle cx="7" cy="17.5" r="1.6"/><circle cx="16" cy="17.5" r="1.6"/>',
   eye: '<path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.6"/>',
+  bulb: '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.8.8 1 1.6 1 2.5h6c0-.9.2-1.7 1-2.5A6 6 0 0 0 12 3z"/>',
 };
 const icon = (name, cls = '') => `<svg class="icon ${cls}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${ICONS[name]}</svg>`;
 
@@ -102,15 +106,24 @@ function setTitle(t) { document.title = t ? `${t} · Med Math` : 'Med Math · do
 function route() {
   clearTimers();
   const h = location.hash.replace(/^#\/?/, '');
-  const [screen, arg] = h.split('/');
+  const [screen, arg, arg2] = h.split('/');
   document.body.dataset.screen = screen || 'home';
   if (screen === 'practice' && TOPIC[arg]) return showPractice(arg);
   if (screen === 'quiz') return showQuiz(arg === 'abg' ? 'abg' : 'mixed');
   if (screen === 'formulas') return showFormulas();
   if (screen === 'settings') return showSettings();
+  if (screen === 'memorize') return showMemorize(memoCtx, arg, arg2);
   return showHome();
 }
 window.addEventListener('hashchange', () => { route(); window.scrollTo(0, 0); });
+
+// what the Memorize screens need from here
+const memoCtx = {
+  view, esc, rich, icon: (n, c) => icon(n, c), $: (sel) => $(sel, view), later, clearTimers, reduced,
+  setTitle: (t) => setTitle(t), focusHeading: () => focusHeading(), whenFonts: (fn) => whenFonts(fn),
+  memo: () => state.memo, saveMemo: (m) => { state.memo = m; saveMemo(m); },
+  seed: () => randomSeed(), seconds: () => (window.__medmath && window.__medmath.speedSeconds) || 60,
+};
 
 function focusHeading() {
   const h = $('h1', view);
@@ -140,6 +153,7 @@ function renderSteps(box, p, { animate = true } = {}) {
   const formula = document.createElement('div');
   formula.className = 'formula-way';
   formula.innerHTML = `<span class="fw-label">${esc(p.formulaLabel || 'The formula way')}</span><p>${esc(p.formula)}</p>`;
+  if (p.trick && TRICK[p.trick]) formula.insertAdjacentHTML('beforeend', `<a class="trick-link" href="#/memorize/trick/${p.trick}">How to remember this: ${esc(TRICK[p.trick].title)} →</a>`);
   box.append(formula);
 
   const drawInto = (it, animateIt) => {
@@ -196,6 +210,7 @@ function showHome() {
         <p class="lede">Free practice for nursing students, from dosage calculations to blood gases. Every problem reads like the real thing, and every answer comes with the working, as a train where the units cancel.</p>
         <div class="hero-actions">
           <a class="btn primary big ticket" href="#/quiz">${icon('ticket')}<span>Mixed quiz<small>10 problems</small></span></a>
+          <a class="btn big" href="#/memorize">${icon('bulb')}<span>Memorize it<small>blood gases</small></span></a>
           <a class="btn big" href="#/formulas">${icon('sheet')}<span>Formula sheet<small>to print</small></span></a>
         </div>
       </div>
@@ -233,6 +248,7 @@ function showHome() {
         </div>
         <a class="btn big ticket" href="#/quiz/abg">${icon('ticket')}<span>Blood gas quiz<small>10 problems</small></span></a>
       </div>
+      ${memoEntryHTML(state.memo)}
       <ul class="stations abg-stations">
         ${GROUPS.find((g) => g.id === 'abg').topics.map((id) => {
           const t = TOPIC[id], st = topicStats(id);
@@ -259,7 +275,9 @@ function showHome() {
   const fig = $('#hero-fig');
   const draw = (animate) => {
     fig.innerHTML = '';
-    const { svg } = drawTrain(sample.steps[0].train, { width: Math.max(300, Math.floor(fig.getBoundingClientRect().width)), animate: animate && !reduced() });
+    const w = Math.floor(fig.getBoundingClientRect().width);
+    // on wider screens lay the train out on one track and let it scale down a little; phones keep two tracks
+    const { svg } = drawTrain(sample.steps[0].train, { width: w >= 420 ? Math.max(w, 580) : Math.max(300, w), animate: animate && !reduced() });
     fig.append(svg);
     fig.dataset.w = fig.getBoundingClientRect().width;
   };
@@ -514,6 +532,8 @@ function nextPractice() {
 
 // global keys: Enter goes on to the next problem once this one is checked
 document.addEventListener('keydown', (e) => {
+  if (document.body.dataset.screen === 'memorize' && !e.defaultPrevented && !e.isComposing && !e.ctrlKey && !e.metaKey && !e.altKey
+    && !/^(input|textarea|select)$/i.test(e.target.tagName || '') && (speedKey(e) || cardKey(e))) return;
   if (e.key !== 'Enter' || e.defaultPrevented || e.isComposing) return;
   const tag = (e.target.tagName || '').toLowerCase();
   if (tag === 'button' || tag === 'a' || tag === 'textarea' || tag === 'select') return;
@@ -647,6 +667,8 @@ function renderResults() {
 // ---------- formula sheet ----------
 
 const fr = (top, bottom) => `<span class="frac"><span>${top}</span><span>${bottom}</span></span>`;
+// a memory hook on the formula sheet, linking to its trick card
+const hook = (id, words) => `<a class="hook-link" href="#/memorize/trick/${id}">${esc(words)}</a>`;
 
 function showFormulas() {
   setTitle('Formula sheet');
@@ -752,6 +774,7 @@ function showFormulas() {
       <section class="card wide abg-card">
         <h2>Blood gases: normal ranges</h2>
         <div class="ranges big">${RANGE_TEXT.map(([k, v]) => `<span><b>${k}</b> ${v}</span>`).join('')}</div>
+        <p class="hook">${hook('twins', 'The 35–45 twins: pH and PaCO2 share 35 and 45.')} ${hook('bicarb', 'HCO3: 24, give or take 2.')} ${hook('oxygen', 'PaO2 needs a B (80–100), SaO2 an A (95–100).')}</p>
         <p class="small">${esc(VARY)}</p>
       </section>
       <section class="card">
@@ -763,11 +786,13 @@ function showFormulas() {
           <li><b>ROME:</b> Respiratory Opposite (pH and PaCO2), Metabolic Equal (pH and HCO3).</li>
           <li><b>Compensation:</b> the other value normal is uncompensated; moved the other way with the pH still out is partial; pH back in range is full (its side of 7.40 tells you the cause).</li>
         </ol>
+        <p class="hook">${hook('acid-base', 'CO2 is an acid: you breathe acid out.')} ${hook('compensation', 'Lungs fast, kidneys slow, never past 7.40.')}</p>
       </section>
       <section class="card">
         <h2>Henderson-Hasselbalch</h2>
         <p class="eq">pH = 6.1 + log10 ${fr('HCO3', '0.03 × PaCO2')}</p>
         <p>HCO3 24 and PaCO2 40 give a ratio of 20 to 1, and 6.1 + log10(20) = 7.40. A lower ratio is more acidic.</p>
+        <p class="hook">${hook('hh', 'Kidneys over lungs. 20 to 1, log 20 ≈ 1.3, 6.1 + 1.3 = 7.4.')}</p>
       </section>
       <section class="card">
         <h2>Expected compensation</h2>
@@ -778,17 +803,20 @@ function showFormulas() {
           <li>Respiratory alkalosis: HCO3 down about 2 (acute) or 4 (chronic) per 10 mmHg PaCO2 below 40</li>
         </ul>
         <p>Outside the expected range means a second disorder. Sources differ a little on these numbers.</p>
+        <p class="hook">${hook('winters', 'One and a half bicarb plus eight, give or take two.')} ${hook('rough', 'Rough check: about the last two digits of the pH (7.13–7.33).')} ${hook('metalk', 'Point seven.')} ${hook('respcomp', '1, 3.5, 2, 4: acute small, chronic big, alkalosis doubles the acute.')}</p>
       </section>
       <section class="card">
         <h2>Anion gap</h2>
         <p class="eq">AG = Na − (Cl + HCO3)</p>
         <p class="eq">corrected = AG + 2.5 × (4 − albumin g/dL)</p>
         <p>Normal is about 8 to 12 mEq/L, and labs vary.</p>
+        <p class="hook">${hook('gap', 'The big positive minus the two big negatives, about 10 ± 2.')} ${hook('albumin', 'Add 2.5 per g/dL below 4.')} ${hook('goldmark', 'High gap causes: GOLDMARK (newer), MUDPILES (older).')}</p>
       </section>
       <section class="card">
         <h2>Oxygenation</h2>
         <p class="eq">P/F = ${fr('PaO2', 'FiO2 (a fraction)')}</p>
         <p>PaO2 80–100 mmHg and SaO2 95–100% are normal. FiO2 40% goes in as 0.40. On room air a healthy P/F is about 400 to 500; 300 or less is one of the Berlin criteria for ARDS.</p>
+        <p class="hook">${hook('pf', 'P over F, and F is a fraction.')} ${hook('allen', 'Allen test: press both, open, release the ulnar: 5–15 s.')}</p>
       </section>
       <section class="card wide">
         <h2>Plain words, for patients</h2>
@@ -856,7 +884,7 @@ function showSettings() {
       </section>
       <section class="card">
         <h2>Progress</h2>
-        <p class="help">${Object.values(state.progress.topics).reduce((n, t) => n + t.total, 0)} answers so far, kept only in this browser.</p>
+        <p class="help">${Object.values(state.progress.topics).reduce((n, t) => n + t.total, 0)} answers so far, kept only in this browser. Resetting also empties the flashcard boxes and the speed-round best.</p>
         <button type="button" class="btn" id="reset">Reset progress</button>
         <p class="help" id="reset-note" aria-live="polite"></p>
       </section>
@@ -901,8 +929,9 @@ function showSettings() {
   $('#reset').addEventListener('click', (e) => {
     if (!armed) { armed = true; e.target.textContent = 'Tap again to reset'; e.target.classList.add('danger'); return; }
     state.progress = resetProgress();
+    state.memo = resetMemo();
     e.target.textContent = 'Reset progress'; e.target.classList.remove('danger'); armed = false;
-    $('#reset-note').textContent = 'Done. Every topic starts fresh.';
+    $('#reset-note').textContent = 'Done. Every topic and every flashcard starts fresh.';
   });
   focusHeading();
 }
@@ -917,4 +946,6 @@ function applyTheme() {
 
 applyTheme();
 route();
-window.__medmath = { state, judge, buildProblem, generateProblem, seeded, Q };
+// a small service worker, so the app (and the flashcards) keep working without a connection
+if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
+window.__medmath = { state, judge, buildProblem, generateProblem, seeded, Q, speedSeconds: 0 };

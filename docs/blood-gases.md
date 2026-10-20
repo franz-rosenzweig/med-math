@@ -7,6 +7,9 @@ them. It's the "Blood gases" box on the home screen, with six topics and a **Blo
 like the rest of Med Math: endless problems, **Check**, **Show me** and **Next**, and every answer worked out step by
 step. This page goes through the six topics and says where the numbers and the advice come from.
 
+To get the ranges and formulas into your head in the first place, there's [Memorizing blood gases](memorize.md),
+with a memory trick for each one and drills to make them stick.
+
 One thing first, because it matters here even more than with doses: methods and normal ranges vary a little from
 program to program and lab to lab. Every blood gas problem says so, and you should check with your instructor
 whenever Med Math and your course disagree. Med Math uses the ranges most nursing courses teach, and they're printed
@@ -163,4 +166,4 @@ These are what I relied on. Where they differ, the page above says so.
 Open **Read the ABG** and do ten in a row, pressing **Show me** whenever the tic-tac-toe grid would have helped, then
 try the **Blood gas quiz**.
 
-<sub>Next: [The 14 topics](topics.md) →</sub>
+<sub>Next: [Memorizing blood gases](memorize.md) →</sub>

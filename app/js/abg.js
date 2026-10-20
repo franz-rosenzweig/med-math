@@ -7,8 +7,21 @@ import { fmt, fmtApprox } from './fmt.js';
 import { pick, int, chance, steps, T } from './kit.js';
 import { TALK, KINDS } from './talk.js';
 
+// Every blood gas number Med Math uses, in one place. The problems, the flashcards, the tiles, the blanks
+// and the speed round all read from here, so a memory trick can never disagree with a problem.
+export const ABG = {
+  ranges: { ph: ['7.35', '7.45'], paco2: ['35', '45'], hco3: ['22', '26'], pao2: ['80', '100'], sao2: ['95', '100'] },
+  mid: { ph: '7.4', paco2: '40', hco3: '24' },
+  hh: { pK: '6.1', sol: '0.03' },
+  winters: { a: '1.5', b: '8', tol: '2' },
+  metAlk: { base: '40', k: '0.7', ref: '24', tol: '2' },
+  resp: { acidAcute: '1', acidChronic: '3.5', alkAcute: '2', alkChronic: '4', per: '10', tol: '2' },
+  gap: { lo: '8', hi: '12', alb: '2.5', albRef: '4' },
+};
+const R = ABG.ranges;
 export const RANGE_TEXT = [
-  ['pH', '7.35–7.45'], ['PaCO2', '35–45 mmHg'], ['HCO3', '22–26 mEq/L'], ['PaO2', '80–100 mmHg'], ['SaO2', '95–100%'],
+  ['pH', `${R.ph[0]}–${R.ph[1]}`], ['PaCO2', `${R.paco2[0]}–${R.paco2[1]} mmHg`], ['HCO3', `${R.hco3[0]}–${R.hco3[1]} mEq/L`],
+  ['PaO2', `${R.pao2[0]}–${R.pao2[1]} mmHg`], ['SaO2', `${R.sao2[0]}–${R.sao2[1]}%`],
 ];
 export const VARY = 'Check with your instructor: methods and ranges vary slightly by program.';
 
@@ -19,9 +32,9 @@ const ph2 = (x) => Q.of(x).toFixedString(2); // pH is always written with two de
 // Which column of the tic-tac-toe grid a value goes in.
 export function columnOf(kind, v) {
   const x = Q.of(v);
-  if (kind === 'ph') return x.lt('7.35') ? 'acid' : x.gt('7.45') ? 'base' : 'normal';
-  if (kind === 'paco2') return x.gt(45) ? 'acid' : x.lt(35) ? 'base' : 'normal'; // CO2 acts as an acid
-  if (kind === 'hco3') return x.lt(22) ? 'acid' : x.gt(26) ? 'base' : 'normal'; // bicarbonate is a base
+  if (kind === 'ph') return x.lt(R.ph[0]) ? 'acid' : x.gt(R.ph[1]) ? 'base' : 'normal';
+  if (kind === 'paco2') return x.gt(R.paco2[1]) ? 'acid' : x.lt(R.paco2[0]) ? 'base' : 'normal'; // CO2 acts as an acid
+  if (kind === 'hco3') return x.lt(R.hco3[0]) ? 'acid' : x.gt(R.hco3[1]) ? 'base' : 'normal'; // bicarbonate is a base
   throw new Error('columnOf ' + kind);
 }
 
@@ -72,9 +85,10 @@ const NAME = { ph: 'pH', paco2: 'PaCO2', hco3: 'HCO3' };
 const WORD = { acid: 'Acid', normal: 'Normal', base: 'Base' };
 
 // Henderson-Hasselbalch on ordinary numbers, only to pick realistic values (keys use frac.js).
-const hhFloat = (hco3, paco2) => 6.1 + Math.log10(hco3 / (0.03 * paco2));
+export const hhFloat = (hco3, paco2) => Number(ABG.hh.pK) + Math.log10(hco3 / (Number(ABG.hh.sol) * paco2));
 // Severinghaus (1979): SaO2 from PaO2, to make a plausible SaO2 to go with a PaO2.
-export const satFromPo2 = (po2) => Math.min(100, Math.round(100 / (1 + 23400 / (po2 ** 3 + 150 * po2))));
+export const satCurve = (po2) => 100 / (1 + 23400 / (po2 ** 3 + 150 * po2));
+export const satFromPo2 = (po2) => Math.min(100, Math.round(satCurve(po2)));
 
 const read = {
   id: 'abg',
@@ -227,7 +241,7 @@ const oxygen = {
 // ---------- Henderson-Hasselbalch ----------
 
 export function hhExact(hco3, paco2) {
-  return Q.of(hco3).div(Q.of('0.03').mul(paco2)).offsetLog10Round('6.1', 2);
+  return Q.of(hco3).div(Q.of(ABG.hh.sol).mul(paco2)).offsetLog10Round(ABG.hh.pK, 2);
 }
 
 const hh = {
@@ -278,10 +292,17 @@ const COMP_RULES = {
   'resp-alk': { what: 'HCO3', unit: 'mEq/L', name: 'respiratory alkalosis', rule: 'HCO3 falls about 2 (acute) or 4 (chronic) for every 10 mmHg the PaCO2 is below 40' },
 };
 export function expectedComp(g) {
-  if (g.kind === 'met-acid') return Q.of('1.5').mul(g.hco3).add(8);
-  if (g.kind === 'met-alk') return Q.of(40).add(Q.of('0.7').mul(Q.of(g.hco3).sub(24)));
-  if (g.kind === 'resp-acid') return Q.of(24).add(Q.of(g.chronic ? '3.5' : 1).mul(Q.of(g.paco2).sub(40)).div(10));
-  return Q.of(24).sub(Q.of(g.chronic ? 4 : 2).mul(Q.of(40).sub(g.paco2)).div(10));
+  const { winters: W, metAlk: M, resp: P, mid } = ABG;
+  if (g.kind === 'met-acid') return Q.of(W.a).mul(g.hco3).add(W.b);
+  if (g.kind === 'met-alk') return Q.of(M.base).add(Q.of(M.k).mul(Q.of(g.hco3).sub(M.ref)));
+  if (g.kind === 'resp-acid') return Q.of(mid.hco3).add(Q.of(g.chronic ? P.acidChronic : P.acidAcute).mul(Q.of(g.paco2).sub(mid.paco2)).div(P.per));
+  return Q.of(mid.hco3).sub(Q.of(g.chronic ? P.alkChronic : P.alkAcute).mul(Q.of(mid.paco2).sub(g.paco2)).div(P.per));
+}
+// The anion gap, the albumin-corrected gap and the P/F ratio, exactly.
+export function anionGap(na, cl, hco3) { return Q.of(na).sub(Q.of(cl).add(hco3)); }
+export function correctedGap(ag, alb) { return Q.of(ag).add(Q.of(ABG.gap.alb).mul(Q.of(ABG.gap.albRef).sub(alb))); }
+export function pfRatio(pao2, fio2) { return Q.of(pao2).div(fio2); }
+export function gapIsHigh(ag) { return Q.of(ag).gt(ABG.gap.hi);
 }
 const SECOND = {
   met: [
@@ -382,7 +403,7 @@ const GAP_OPTIONS = [{ id: 'high', label: 'Yes, it’s high' }, { id: 'normal', 
 const gap = {
   id: 'gap',
   build(g, s) {
-    const ag = Q.of(g.na).sub(Q.of(g.cl).add(g.hco3));
+    const ag = anionGap(g.na, g.cl, g.hco3);
     const lines = [{ label: 'Na', text: `${fmt(g.na)} mEq/L` }, { label: 'Cl', text: `${fmt(g.cl)} mEq/L` }, { label: 'HCO3', text: `${fmt(g.hco3)} mEq/L` }];
     const fig = { kind: 'gap', na: g.na, cl: g.cl, hco3: g.hco3, ag: ag.toNumber() };
     const st = [{ say: `The anion gap is the sodium minus the chloride and bicarbonate: ${fmt(g.na)} − (${fmt(g.cl)} + ${fmt(g.hco3)}) = ${fmt(g.na)} − ${fmt(Q.of(g.cl).add(g.hco3))} = **${fmt(ag)} mEq/L**. It’s the part of the negative charges the usual lab panel doesn’t measure.`, fig }];
@@ -390,7 +411,7 @@ const gap = {
     const common = { note, formula: `AG = Na − (Cl + HCO3) = ${fmt(g.na)} − (${fmt(g.cl)} + ${fmt(g.hco3)}) = ${fmt(ag)} mEq/L`, facts: { ag } };
     if (g.kind === 'corr') {
       lines.push({ label: 'Albumin', text: `${fmt(g.alb)} g/dL` });
-      const corr = ag.add(Q.of('2.5').mul(Q.of(4).sub(g.alb)));
+      const corr = correctedGap(ag, g.alb);
       st.push({ say: `Albumin carries negative charge too, so when it’s low the gap looks smaller than it really is. Add 2.5 for every 1 g/dL the albumin is below 4: 2.5 × (4 − ${fmt(g.alb)}) = ${fmt(Q.of('2.5').mul(Q.of(4).sub(g.alb)))}, and ${fmt(ag)} + ${fmt(Q.of('2.5').mul(Q.of(4).sub(g.alb)))} = **${fmt(corr)} mEq/L**.${ag.le(12) && corr.gt(12) ? ' The plain gap looked normal, but the corrected one is high.' : ''}` });
       return {
         ...common, lines, ask: 'What is the albumin-corrected anion gap?',
@@ -401,7 +422,7 @@ const gap = {
       };
     }
     if (g.kind === 'high') {
-      const key = ag.gt(12) ? 'high' : 'normal';
+      const key = gapIsHigh(ag) ? 'high' : 'normal';
       st.push({ say: key === 'high' ? `${fmt(ag)} is above about 12, so **yes, it’s high**. A high gap points to an extra acid in the blood that isn’t chloride, like lactate or ketones.` : `${fmt(ag)} is inside about 8 to 12, so **no, it’s normal**.` });
       return { ...common, lines, ask: 'Is the anion gap high?', answer: { type: 'choice', key, options: GAP_OPTIONS }, steps: st, facts: { ag, key } };
     }
@@ -453,11 +474,22 @@ const talk = {
   },
 };
 
+// Which memory-trick card each problem's "Show me" links to.
+const TRICK_FOR = {
+  abg: () => 'tictactoe',
+  oxygen: (g) => (g.kind === 'pf' ? 'pf' : 'oxygen'),
+  hh: () => 'hh',
+  comp: (g) => (g.kind === 'met-acid' ? 'winters' : g.kind === 'met-alk' ? 'metalk' : 'respcomp'),
+  gap: (g) => (g.kind === 'corr' ? 'albumin' : 'gap'),
+  talk: (g) => (g.card === 'allen-test' ? 'allen' : null),
+};
+const withTrick = (t) => ({ ...t, build(g, s) { const p = t.build.call(this, g, s); p.trick = TRICK_FOR[t.id](g); return p; } });
+
 export const ABG_TOPICS = [
-  { ...read, name: 'Read the ABG', hint: 'ROME and tic-tac-toe' },
-  { ...oxygen, name: 'Oxygenation', hint: 'PaO2, SaO2 and P/F' },
-  { ...hh, name: 'The equation', hint: 'Henderson-Hasselbalch' },
-  { ...comp, name: 'Expected compensation', hint: 'is there a second disorder?' },
-  { ...gap, name: 'Anion gap', hint: 'and the albumin correction' },
-  { ...talk, name: 'Talk it through', hint: 'explaining it to patients' },
+  { ...withTrick(read), name: 'Read the ABG', hint: 'ROME and tic-tac-toe' },
+  { ...withTrick(oxygen), name: 'Oxygenation', hint: 'PaO2, SaO2 and P/F' },
+  { ...withTrick(hh), name: 'The equation', hint: 'Henderson-Hasselbalch' },
+  { ...withTrick(comp), name: 'Expected compensation', hint: 'is there a second disorder?' },
+  { ...withTrick(gap), name: 'Anion gap', hint: 'and the albumin correction' },
+  { ...withTrick(talk), name: 'Talk it through', hint: 'explaining it to patients' },
 ];

@@ -42,6 +42,16 @@ def main():
             for s in report["summary"]:
                 v = f"  {s['verdicts']}" if s.get("verdicts") else ""
                 print(f"  {s['profile'][:24]:24} {s['topic']:11} made {s['made']:5} agree {s['agree']:5} different {s['unique']:5} errors {s['errors']}{v}")
+        # the service worker has to keep every file the app needs
+        sw = (ROOT / "app" / "sw.js").read_text()
+        app = ROOT / "app"
+        needed = [p.relative_to(app).as_posix() for p in list((app / "js").glob("*.js")) + list((app / "fonts").glob("*.woff2"))]
+        missing = [n for n in needed if f"'{n}'" not in sw]
+        if missing:
+            print("FAIL: sw.js doesn't list", ", ".join(missing))
+            report["ok"] = False
+        else:
+            print(f"  sw.js ✓ lists all {len(needed)} scripts and fonts")
         for f in report["failures"]:
             print("FAIL:", f)
         if b.problems:

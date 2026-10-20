@@ -234,6 +234,123 @@ try:
     check(score == "9/10", f"blood gas quiz score shows 9/10 ({score})")
     shot("abg-quiz-results", full=True)
 
+    # ---------- memorize it ----------
+    open_("", wait=1.5)
+    check(b.js("!!document.querySelector('.memo-entry') && document.querySelector('.memo-entry').textContent.includes('due today')"), "home has the Memorize it card with cards due today")
+    open_("memorize", wait=1.2)
+    check(b.js("document.querySelectorAll('.drill').length") == 5 and b.js("document.querySelectorAll('.trick-tile').length") == 18, "Memorize it lists 5 drills and 18 tricks")
+    shot("memo-hub", full=MOBILE)
+    tricks = b.js("[...document.querySelectorAll('.trick-tile')].map(a => a.getAttribute('href'))")
+    drawn = 0
+    for href in tricks:
+        b.go(f"{URL}{href}", wait=0.5)
+        drawn += 1 if b.js("!!document.querySelector('#trick-fig svg')") else 0
+    check(drawn == len(tricks), f"every trick card has its drawing ({drawn} of {len(tricks)})")
+    open_("memorize/trick/hh", wait=1)
+    shot("memo-trick", full=MOBILE)
+
+    # flashcards, with the keyboard
+    open_("memorize/cards", wait=1)
+    due0 = b.js("window.__medmath.state.memo && Object.keys(window.__medmath.state.memo.cards).length")
+    def key(k, code):
+        for t in ("keyDown", "keyUp"):
+            b.call("Input.dispatchKeyEvent", type=t, key=k, code=code, **({"text": k} if t == "keyDown" and len(k) == 1 else {}))
+        b.pump(0.25)
+    b.js("document.activeElement && document.activeElement.blur()")
+    key(" ", "Space")
+    check(b.js("!!document.querySelector('.flash-back')"), "Space shows the flashcard's answer")
+    shot("memo-flash", full=MOBILE)
+    key("g", "KeyG")
+    key(" ", "Space"); key("n", "KeyN")
+    key(" ", "Space"); key("g", "KeyG")
+    saved = b.js("JSON.parse(localStorage.getItem('med-math:memo:v1'))")
+    boxes = sorted(v["box"] for v in (saved or {}).get("cards", {}).values())
+    check(boxes == [1, 2, 2], f"G and N move cards between Leitner boxes and it's saved ({boxes})")
+
+    # build the formula: tap to place, then drag
+    open_("memorize/build/hh", wait=1)
+    for t in ["6.1", "HCO3", "0.03", "PaCO2"]:
+        b.js(f"document.querySelector('.tile[data-tile=\"{t}\"]').click()")
+        b.pump(0.1)
+    b.js("document.querySelector('#bcheck').click()")
+    b.pump(0.2)
+    check("right" in b.js("document.querySelector('#feedback').className"), "build: tapping the tiles into place builds Henderson-Hasselbalch")
+    shot("memo-build", full=MOBILE)
+    open_("memorize/build/winters", wait=1)
+    def drag(tile, slot):
+        r1 = b.js(f"(() => {{ const e = document.querySelector('.tile[data-tile=\"{tile}\"]'); e.scrollIntoView({{block:'center'}}); const r = e.getBoundingClientRect(); return [r.left + r.width/2, r.top + r.height/2]; }})()")
+        r2 = b.js(f"(() => {{ const r = document.querySelector('.slot[data-slot=\"{slot}\"]').getBoundingClientRect(); return [r.left + r.width/2, r.top + r.height/2]; }})()")
+        if MOBILE:
+            b.call("Input.dispatchTouchEvent", type="touchStart", touchPoints=[{"x": r1[0], "y": r1[1]}])
+            for k in range(1, 9):
+                b.call("Input.dispatchTouchEvent", type="touchMove", touchPoints=[{"x": r1[0] + (r2[0] - r1[0]) * k / 8, "y": r1[1] + (r2[1] - r1[1]) * k / 8}])
+            b.call("Input.dispatchTouchEvent", type="touchEnd", touchPoints=[])
+        else:
+            b.call("Input.dispatchMouseEvent", type="mousePressed", x=r1[0], y=r1[1], button="left", clickCount=1)
+            for k in range(1, 9):
+                b.call("Input.dispatchMouseEvent", type="mouseMoved", x=r1[0] + (r2[0] - r1[0]) * k / 8, y=r1[1] + (r2[1] - r1[1]) * k / 8, button="left", buttons=1)
+            b.call("Input.dispatchMouseEvent", type="mouseReleased", x=r2[0], y=r2[1], button="left", clickCount=1)
+        b.pump(0.3)
+    drag("8", 2); drag("HCO3", 1); drag("1.5", 0)
+    placed = b.js("[...document.querySelectorAll('.slot')].map(s => s.textContent.trim())")
+    check(placed == ["1.5", "HCO3", "8"], f"build: dragging tiles drops them in the slots ({placed})")
+    b.js("document.querySelector('#bcheck').click()"); b.pump(0.2)
+    check("right" in b.js("document.querySelector('#feedback').className"), "build: the dragged Winters' formula counts")
+    open_("memorize/build/pf", wait=1)
+    for t in ["SaO2", "FiO2"]:  # real presses this time, not scripted clicks
+        r = b.js(f"(() => {{ const e = document.querySelector('.tile[data-tile=\"{t}\"]'); e.scrollIntoView({{block:'center'}}); const r = e.getBoundingClientRect(); return [r.left + r.width/2, r.top + r.height/2]; }})()")
+        if MOBILE:
+            b.call("Input.dispatchTouchEvent", type="touchStart", touchPoints=[{"x": r[0], "y": r[1]}])
+            b.call("Input.dispatchTouchEvent", type="touchEnd", touchPoints=[])
+        else:
+            b.call("Input.dispatchMouseEvent", type="mousePressed", x=r[0], y=r[1], button="left", clickCount=1)
+            b.call("Input.dispatchMouseEvent", type="mouseReleased", x=r[0], y=r[1], button="left", clickCount=1)
+        b.pump(0.45)
+    check(b.js("[...document.querySelectorAll('.slot')].map(s => s.textContent.trim()).join(',')") == "SaO2,FiO2", "build: real taps on tiles put them in the next empty slots")
+    b.js("document.querySelector('#bcheck').click()"); b.pump(0.2)
+    check("wrong" in b.js("document.querySelector('#feedback').className"), "build: a decoy tile is marked wrong")
+
+    # fill the blank: answer the first one with the real answers
+    open_("memorize/blanks", seed=5, wait=1)
+    answers = b.js("""(async () => { const M = await import('./js/memo.js');
+      const line = document.querySelector('.cloze-line').textContent;
+      const c = M.CLOZE.find(c => c.parts.filter(p => typeof p !== 'object').every(p => line.includes(p)));
+      return c ? M.blanksOf(c).map(b => b.answer) : null; })()""")
+    check(answers is not None, "fill the blank: found the sentence")
+    for i, a in enumerate(answers or []):
+        b.js(f"document.querySelectorAll('.blank')[{i}].value = {json.dumps(a)}")
+    b.js("document.querySelector('.blank').focus()")
+    enter()
+    check("right" in b.js("document.querySelector('#feedback').className"), "fill the blank: the right answers count, and Enter checks")
+    shot("memo-blanks", full=MOBILE)
+
+    # the speed round, shortened to 4 seconds
+    open_("memorize/speed", wait=1)
+    b.js("window.__medmath.speedSeconds = 4; document.querySelector('#go').click()")
+    b.pump(0.3)
+    shot("memo-speed", full=MOBILE)
+    pressed = 0
+    for k in ("a", "n", "b", "a", "n"):
+        if b.js("!!document.querySelector('.speed-item')"):
+            key(k, "Key" + k.upper()); pressed += 1
+    b.pump(4.2)
+    check(b.js("!!document.querySelector('.speed-score')"), "the speed round ends after its time")
+    sb = b.js("JSON.parse(localStorage.getItem('med-math:memo:v1')).speedBest")
+    check(pressed == 5 and isinstance(sb, int), f"the speed round counts key presses and saves the best ({sb})")
+    shot("memo-speed-done", full=MOBILE)
+
+    open_("memorize/dump", wait=1)
+    check(b.js("document.querySelectorAll('.dump-sheet .dump-box').length") == b.js("document.querySelectorAll('.dump-key .dump-box').length") > 10, "the brain dump has a blank sheet and a matching answer key")
+    shot("memo-dump", full=True)
+
+    # Show me links to the trick, and the formula sheet has the hooks
+    open_("practice/hh", seed=5)
+    b.js("document.querySelector('#showme').click()")
+    wait_showme()
+    check(b.js("document.querySelector('#showme-body .trick-link')?.getAttribute('href')") == "#/memorize/trick/hh", "Show me links to its memory trick")
+    open_("formulas", wait=1)
+    check(b.js("document.querySelectorAll('.hook-link').length") >= 14, "the formula sheet has a memory hook next to each blood gas formula")
+
     # ---------- quiz ----------
     open_("quiz", seed=99)
     shot("quiz")

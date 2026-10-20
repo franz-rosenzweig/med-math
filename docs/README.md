@@ -18,6 +18,7 @@ is for changing Med Math itself, and you only need it if you're working on the c
 
 ### Blood gases
 - [Blood gases](blood-gases.md) — reading an ABG with ROME and tic-tac-toe, oxygen and the P/F ratio, Henderson-Hasselbalch, expected compensation, the anion gap, explaining it to patients, and the sources
+- [Memorizing blood gases](memorize.md) — the memory trick cards (which are standard and which are made up), flashcards with Leitner boxes, building formulas from tiles, fill the blank, the speed round and the brain dump
 
 ### Reference
 - [The 14 topics](topics.md) — what each dosage topic asks, with an example and the rounding it uses

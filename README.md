@@ -69,6 +69,16 @@ had that exam coming up.
   treatment advice.
 - **A blood gas quiz** of its own, and every random ABG fits the Henderson-Hasselbalch equation, like a real one.
 
+### Memorize it
+- **18 memory trick cards,** one for each range, formula and rule: the 35–45 twins, CO2 is an acid, ROME,
+  tic-tac-toe, "lungs fast, kidneys slow", kidneys over lungs, Winters', point seven, 1-3.5-2-4, the anion gap,
+  MUDPILES and GOLDMARK, P over F and the Allen test. Each has a drawing, a line on why it works, and a label
+  saying whether it's a standard mnemonic or one I made up.
+- **Flashcards** with Leitner boxes (45 cards, a "due today" count, and it works offline).
+- **Build the formula** from tiles, by tapping or dragging, with decoys; **Fill the blank**; a 60-second
+  **Speed round** of Acid, Normal or Base; and a printable **Brain dump** sheet with its answer key.
+- Every Show me for a blood gas problem links to its trick, and the formula sheet has the hooks next to the formulas.
+
 ### Show me
 - **The fraction train.** The engine carries the unit you want, each fraction is a car, the units that cancel get
   struck through in pencil, and the caboose carries the answer under a highlighter.
@@ -102,6 +112,9 @@ had that exam coming up.
 
 ![A Talk it through card: a weaker answer picked, and why it's weaker](docs/images/talk-feedback.png)
 *Talk it through: practice for explaining it to a patient.*
+
+![Memorize it: the drills and the memory trick cards](docs/images/memo-hub.png)
+*Memorize it: one card for each thing to remember, and five drills.*
 
 ![A weight-based dose: the weight turned into kg on one train, then the dose per day split into doses on another](docs/images/weight-train.png)
 *A weight-based dose. First the pounds become kg, then the dose train.*
@@ -148,7 +161,7 @@ The docs explain everything Med Math does, in order:
 - **Getting started:** [What is Med Math?](docs/what-is-med-math.md)
 - **Using it:** [Practicing a topic](docs/practice.md), [How the train works](docs/the-train.md) and
   [The quiz and the formula sheet](docs/quiz-and-formulas.md)
-- **Blood gases:** [Blood gases](docs/blood-gases.md), with the sources
+- **Blood gases:** [Blood gases](docs/blood-gases.md), with the sources, and [Memorizing blood gases](docs/memorize.md)
 - **Reference:** [The 14 topics](docs/topics.md) and [Settings](docs/settings.md)
 - **Under the hood:** [Developing](docs/DEVELOPING.md)
 
@@ -163,6 +176,8 @@ Plain HTML, CSS and JavaScript modules, with no framework and no build step. The
 | `app/js/topics.js` | The 14 dosage problem makers. Each picks the numbers, writes the order and builds the train. |
 | `app/js/abg.js`, `app/js/talk.js` | The six blood gas topics, and the "Talk it through" cards and glossary. |
 | `app/js/abgview.js` | The tic-tac-toe grid, the number line, the anion gap columns and the talk card review. |
+| `app/js/memo.js`, `memoui.js`, `memoview.js` | Memorize it: the trick cards, flashcards, tiles, blanks and speed round, their screens, and their drawings. |
+| `app/sw.js` | A small service worker, so the app and the flashcards work offline. |
 | `app/js/frac.js`, `train.js`, `rules.js` | Exact fractions, multiplying the train out and cancelling units, and the rounding rules. |
 | `app/js/formulas.js` | The second, independent way of working every answer, with plain formulas (and ROME for ABGs). |
 | `app/js/answer.js` | Reading what you typed (0.5, .5, 1/2, 7:30 PM) and deciding if it's right. |

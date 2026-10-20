@@ -24,6 +24,9 @@ Plain ES modules in `app/`, no framework, no build step and no network calls apa
 | `app/js/talk.js` | The "Talk it through" cards (scene, options with a kind and a why, a model answer) and the plain-words glossary. The facts behind them are in `REVIEW.md`. |
 | `app/js/kit.js` | Shared helpers for making problems: random picks, `T()` for exact trains, answer keys and the rounding words. |
 | `app/js/abgview.js` | The blood gas drawings: tic-tac-toe grid, number line, anion gap columns, talk review. |
+| `app/js/memo.js` | Memorize it: the trick cards (`TRICKS`, each labeled standard, made up, mixed or rough), the flashcards and the Leitner scheduling, the formulas to build (`BUILD`, checked by `checkBuild`, which works the formula out at `SAMPLES` and compares with the problem functions), the blanks (`CLOZE`, `judgeCloze`), the speed round (`speedItem`, answered by `columnOf`), the brain dump, and a tiny calculator (`evaluate`). |
+| `app/js/memoui.js`, `app/js/memoview.js` | The Memorize screens (hub, trick card, flashcards, build with tap and drag, blanks, speed round, brain dump) and the trick drawings. |
+| `app/sw.js` | The service worker: network first, with a saved copy of every file as the fallback, so it works offline. If you add a file, add it to `FILES` (tools/test.py checks). |
 | `app/js/fmt.js` | Writing numbers (leading zero, no trailing zero, commas), clock times and durations. |
 | `app/js/store.js` | Settings and progress in localStorage, every access wrapped, with an in-memory fallback. |
 
@@ -40,6 +43,10 @@ ordinary floating-point numbers, its own unit tables and its own rounding (it sh
 string, so 1.005 really becomes 1.01). It doesn't import anything from the main path. It also returns the list of
 numbers it used, and the test checks each of those is printed in the problem, which catches an order line that shows
 a different number from the one the train used.
+
+All the blood gas numbers live in one object, `ABG` in `abg.js`: the ranges, the Henderson-Hasselbalch constants,
+Winters', metabolic alkalosis, the respiratory factors and the anion gap. The problems, the flashcards, the tiles, the
+blanks and the speed round all read from it.
 
 For blood gases the second way is ROME on signs (−1, 0, +1 for each number), where the main way places the numbers in
 tic-tac-toe columns. Henderson-Hasselbalch is the one place a log comes in: `Q.offsetLog10Round()` in `frac.js`
@@ -65,6 +72,10 @@ tests are in `tools/tests.js`:
    Then the nine ABG readings, Henderson-Hasselbalch for 24 and 40, Winters' for HCO3 12, the anion gap for 140, 104
    and 12, two P/F ratios and a corrected gap, every pH/PaCO2/HCO3 combination on a grid read the same both ways,
    and every talk card checked for one best answer, an explanation for each option and a model answer.
+   For Memorize it: the ranges and rules are read back out of the problem functions (scanning `columnOf`, sampling
+   `expectedComp` and so on) and every flashcard, tile solution and blank is checked against them; every arrangement
+   of every formula's tiles is tried, and only the right ones (with no decoy) may pass; 3,000 speed-round values are
+   checked; the pH shortcut's numbers are measured; and the Leitner scheduling is checked.
 2. 1,000 random problems per topic with the default settings, and 400 more per topic with two other settings
    profiles (tenths, whole pump rates, kg in hundredths, 2.2046, 12-hour clock; and hundredths with 2.2046). For each:
    both ways agree, the units cancel, every number used is printed, nothing says "undefined" or "NaN", the key is

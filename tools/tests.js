@@ -13,7 +13,9 @@ import { TOPICS, buildProblem, generateProblem, seeded } from '../app/js/topics.
 import { byFormula, roundDp } from '../app/js/formulas.js';
 import { judge, parseNumber, parseClock } from '../app/js/answer.js';
 import { DEFAULT_SETTINGS } from '../app/js/rules.js';
-import { readTTT } from '../app/js/abg.js';
+import { readTTT, columnOf, expectedComp, hhExact, hhFloat, anionGap, correctedGap, pfRatio, gapIsHigh } from '../app/js/abg.js';
+import * as MEMO from '../app/js/memo.js';
+import { TOPIC } from '../app/js/topics.js';
 import { TALK, KINDS } from '../app/js/talk.js';
 
 const failures = [];
@@ -160,6 +162,144 @@ for (const c of TALK) {
   ok(c.model && c.model.length > 80 && c.scene && c.says && c.who, `${where}: has a scene and a model answer`);
 }
 log.push(`talk ✓ ${TALK.length} cards, each with one best answer and every option explained`);
+
+// ---------- 1c. memorize it: every card, tile, blank and the speed round ----------
+{
+  const M = MEMO;
+  // Read the numbers back out of the problem functions themselves, independently of the constants.
+  const scan = (kind, from, to, step) => {
+    const normal = [];
+    for (let v = from; v <= to + 1e-9; v += step) { const x = Number(v.toFixed(2)); if (columnOf(kind, x) === 'normal') normal.push(x); }
+    return [normal[0], normal[normal.length - 1]];
+  };
+  const [phLo, phHi] = scan('ph', 7.0, 7.8, 0.01), [cLo, cHi] = scan('paco2', 10, 100, 1), [hLo, hHi] = scan('hco3', 4, 50, 1);
+  const E = (g) => expectedComp(g).toNumber();
+  const wa = (E({ kind: 'met-acid', hco3: 20 }) - E({ kind: 'met-acid', hco3: 10 })) / 10, wb = E({ kind: 'met-acid', hco3: 10 }) - 10 * wa;
+  const mk = (E({ kind: 'met-alk', hco3: 34 }) - E({ kind: 'met-alk', hco3: 24 })) / 10, m40 = E({ kind: 'met-alk', hco3: 24 });
+  const ra1 = E({ kind: 'resp-acid', chronic: false, paco2: 50 }) - 24, ra2 = E({ kind: 'resp-acid', chronic: true, paco2: 50 }) - 24;
+  const rk1 = 24 - E({ kind: 'resp-alk', chronic: false, paco2: 30 }), rk2 = 24 - E({ kind: 'resp-alk', chronic: true, paco2: 30 });
+  const albK = correctedGap(10, 3).toNumber() - 10, albRef = (() => { for (let a = 2; a <= 6; a += 0.1) if (Math.abs(correctedGap(10, a).toNumber() - 10) < 1e-9) return Number(a.toFixed(1)); })();
+  let gapHi = null; for (let g = 5; g <= 20; g++) if (!gapIsHigh(g) && gapIsHigh(g + 1)) gapHi = g;
+  const f = (x) => String(Number(x.toFixed(4)));
+  ok(phLo === 7.35 && phHi === 7.45 && cLo === 35 && cHi === 45 && hLo === 22 && hHi === 26, `memo: ranges read from the ABG reader are ${phLo}–${phHi}, ${cLo}–${cHi}, ${hLo}–${hHi}`);
+  ok(wa === 1.5 && wb === 8 && mk === 0.7 && m40 === 40 && ra1 === 1 && ra2 === 3.5 && rk1 === 2 && rk2 === 4 && albK === 2.5 && albRef === 4 && gapHi === 12,
+    `memo: rules read from the problem functions: Winters ${wa}/${wb}, alk ${mk}/${m40}, resp ${ra1}/${ra2}/${rk1}/${rk2}, albumin ${albK}/${albRef}, gap ${gapHi}`);
+  ok(hhExact(24, 40).toFixedString(2) === '7.40' && anionGap(140, 104, 12).eq(24) && pfRatio(80, '0.4').eq(200), 'memo: the worked examples on the cards come out right');
+  // every flashcard says what the problems use
+  const MUST = {
+    'r-ph': [phLo.toFixed(2), phHi.toFixed(2)], 'r-paco2': [f(cLo), f(cHi)], 'r-hco3': [f(hLo), f(hHi)], 'r-pao2': ['80', '100'], 'r-sao2': ['95', '100'],
+    'r-gap': ['8', f(gapHi)], mid: ['7.40', '40', '24'], winters: [f(wa), f(wb), '±2'], metalk: [f(m40), f(mk), '24', '±2'],
+    'ra-acute': [f(ra1)], 'ra-chronic': [f(ra2)], 'rk-acute': [f(rk1)], 'rk-chronic': [f(rk2)], hh: ['6.1', '0.03'], 'hh-pk': ['6.1'], 'hh-sol': ['0.03'],
+    'gap-alb': [f(albK), f(albRef)], ratio: ['20'], gap: ['Na', 'Cl', 'HCO3'], pf: ['PaO2', 'FiO2'],
+  };
+  const ids = new Set();
+  for (const c of M.FLASHCARDS) {
+    ok(!ids.has(c.id) && c.front && c.back && M.TRICK[c.trick], `memo: flashcard ${c.id} is complete and links to a trick`);
+    ids.add(c.id);
+    for (const bit of MUST[c.id] || []) ok(c.back.includes(bit), `memo: flashcard ${c.id} should say ${bit}: “${c.back}”`);
+  }
+  ok(Object.keys(MUST).every((k) => ids.has(k)), 'memo: every checked flashcard exists');
+  // the hh formula on its card agrees with the problems
+  const hhCard = M.FLASHCARDS.find((c) => c.id === 'hh').back.match(/([\d.]+) \+ log\(HCO3 ÷ \(([\d.]+) × PaCO2\)\)/);
+  ok(hhCard && [[24, 40], [12, 26], [31, 55], [7, 19]].every(([h, p]) => Math.abs(Number(hhCard[1]) + Math.log10(h / (Number(hhCard[2]) * p)) - hhExact(h, p).toNumber()) <= 0.0051), 'memo: the Henderson-Hasselbalch card matches the problems');
+  // mnemonics spell themselves
+  ok(M.MUDPILES.map(([l, w]) => (w[0] === l ? l : '?')).join('') === 'MUDPILES', 'memo: MUDPILES letters match their words');
+  ok(M.GOLDMARK.map(([l, w]) => (w[0] === l || (l === 'L' && w.startsWith('L-')) || (l === 'D' && w.startsWith('D-')) ? l : '?')).join('') === 'GOLDMARK', 'memo: GOLDMARK letters match their words');
+  // trick cards are complete, labeled, and their links go somewhere real
+  for (const t of M.TRICKS) {
+    ok(t.title && t.thing && t.trick && t.why && t.source && M.KIND_LABEL[t.kind], `memo: trick ${t.id} is complete and labeled`);
+    for (const [, href] of t.practice) {
+      const m = /^#\/(practice|memorize)\/([\w-]+)(?:\/([\w-]+))?$/.exec(href);
+      ok(m && (m[1] === 'practice' ? !!TOPIC[m[2]] : ['cards', 'build', 'blanks', 'speed', 'dump', 'trick'].includes(m[2]) && (!m[3] || M.BUILD_BY[m[3]] || M.TRICK[m[3]])), `memo: trick ${t.id} links to ${href}`);
+    }
+  }
+  // build the formula: the answer is right, at the sample values and at 200 more random ones, and no arrangement using a decoy passes
+  const EXPECT_WAYS = { hh: 2, winters: 2, metalk: 1, gap: 2, albumin: 1, pf: 1 };
+  const rng = seeded(4242);
+  for (const b of M.BUILD) {
+    ok(M.checkBuild(b, b.answer), `memo: build ${b.id}: the answer is accepted`);
+    const T = M.TRUTH[b.id];
+    let worst = 0;
+    for (let k = 0; k < 200; k++) {
+      const v = { HCO3: 5 + Math.round(rng() * 400) / 10, PaCO2: 15 + Math.round(rng() * 700) / 10, Na: 128 + Math.round(rng() * 22), Cl: 88 + Math.round(rng() * 28), K: 3 + rng() * 3,
+        AG: 4 + Math.round(rng() * 30), albumin: 1.5 + Math.round(rng() * 30) / 10, PaO2: 40 + Math.round(rng() * 160), FiO2: [0.21, 0.3, 0.4, 0.5, 0.6, 1][Math.floor(rng() * 6)], SaO2: 90 };
+      worst = Math.max(worst, Math.abs(M.evaluate(M.buildExpr(b, b.answer), v) - T.f(v)) / (T.tol > 1e-6 ? 1 : Math.max(1, Math.abs(T.f(v)))));
+    }
+    ok(worst <= T.tol, `memo: build ${b.id}: the tiles match the problem function everywhere (worst ${worst})`);
+    const tiles = [...b.answer, ...b.decoys];
+    const k = b.answer.length;
+    let ways = 0, badWays = 0;
+    const pickN = (chosen) => {
+      if (chosen.length === k) {
+        if (M.checkBuild(b, chosen)) { ways += 1; if (chosen.some((t) => b.decoys.includes(t))) badWays += 1; }
+        return;
+      }
+      for (const t of tiles) if (!chosen.includes(t)) pickN([...chosen, t]);
+    };
+    pickN([]);
+    ok(ways === EXPECT_WAYS[b.id] && badWays === 0, `memo: build ${b.id}: ${ways} arrangements pass (want ${EXPECT_WAYS[b.id]}), ${badWays} with a decoy`);
+  }
+  // fill the blank: the answers are what the problems use, and the checker is fair
+  const CLOZE_EXPECT = {
+    winters: ['HCO3', f(wb), '2'], 'winters-a': [f(wa)], hh: ['6.1', '0.03'], metalk: [f(m40), f(mk), '24'],
+    'r-ph': [phLo.toFixed(2), phHi.toFixed(2)], 'r-paco2': [f(cLo), f(cHi)], 'r-hco3': [f(hLo), f(hHi)], 'r-o2': ['80', '100', '95', '100'],
+    'resp-acid': [f(ra1), f(ra2)], 'resp-alk': [f(rk1), f(rk2)], gap: ['Na', 'Cl', 'HCO3'], 'gap-normal': ['8', f(gapHi)],
+    albumin: [f(albK), f(albRef)], rome: ['opposite', 'equal'], ratio: ['20'], pf: ['PaO2', 'FiO2'],
+  };
+  for (const c of M.CLOZE) {
+    const want = CLOZE_EXPECT[c.id];
+    const answers = M.blanksOf(c).map((b) => b.answer);
+    ok(want && JSON.stringify(answers) === JSON.stringify(want), `memo: blank ${c.id}: answers ${JSON.stringify(answers)}, want ${JSON.stringify(want)}`);
+    ok(M.judgeCloze(c, answers).every(Boolean), `memo: blank ${c.id}: the right answers count`);
+    ok(M.judgeCloze(c, answers.map((a, i) => (i === 0 ? (Number.isNaN(Number(a)) ? 'nope' : String(Number(a) + 1)) : a)))[0] === false, `memo: blank ${c.id}: a wrong first blank doesn't`);
+    ok(!/undefined|NaN/.test(M.clozeText(c)) && M.TRICK[c.trick], `memo: blank ${c.id} reads properly`);
+  }
+  const g = M.CLOZE.find((c) => c.id === 'gap');
+  ok(M.judgeCloze(g, ['sodium', 'bicarb', 'chloride']).every(Boolean) && !M.judgeCloze(g, ['Na', 'Cl', 'Cl']).every(Boolean), 'memo: the anion gap blanks take Cl and HCO3 in either order, but not twice');
+  ok(M.judgeCloze(M.CLOZE.find((c) => c.id === 'metalk'), ['40', '.7', '24']).every(Boolean), 'memo: .7 counts as 0.7');
+  // the speed round: right answers from the ABG reader's own function, and a separate check of the edges
+  let speedOk = 0;
+  const srng = seeded(99);
+  for (let k = 0; k < 3000; k++) {
+    const it = M.speedItem(srng);
+    const indep = it.kind === 'ph' ? (it.value < phLo ? 'acid' : it.value > phHi ? 'base' : 'normal')
+      : it.kind === 'paco2' ? (it.value > cHi ? 'acid' : it.value < cLo ? 'base' : 'normal')
+        : (it.value < hLo ? 'acid' : it.value > hHi ? 'base' : 'normal');
+    const edge = (it.kind === 'ph' ? [phLo, phHi] : it.kind === 'paco2' ? [cLo, cHi] : [hLo, hHi]).includes(it.value);
+    if (it.answer === columnOf(it.kind, it.value) && it.answer === indep && !edge) speedOk++;
+  }
+  ok(speedOk === 3000, `memo: speed round: ${speedOk} of 3,000 values classed right, none on an edge`);
+  // the rough check, over the range the card states, with the pH as it's written (two decimals)
+  const shownWorst = {};
+  for (let h = 3; h <= 30; h += 0.005) {
+    const hh = Number(h.toFixed(3));
+    const e = E({ kind: 'met-acid', hco3: hh });
+    const shown = hhExact(hh, e).toNumber();
+    const key = shown.toFixed(2);
+    shownWorst[key] = Math.max(shownWorst[key] || 0, Math.abs(e - (shown - 7) * 100));
+  }
+  const inRange = Object.entries(shownWorst).filter(([k]) => Number(k) >= Number(M.ROUGH.from) && Number(k) <= Number(M.ROUGH.to));
+  const worstShown = Math.max(...inRange.map(([, v]) => v));
+  const worstAt = inRange.find(([, v]) => v === worstShown)[0];
+  ok(Math.abs(worstShown - Number(M.ROUGH.worst)) <= 0.05 && Math.abs(Number(worstAt) - Number(M.ROUGH.worstAt)) <= 0.015, `memo: rough check: worst ${worstShown.toFixed(2)} at pH ${worstAt} over ${M.ROUGH.from}–${M.ROUGH.to}; the card says ${M.ROUGH.worst} around ${M.ROUGH.worstAt}`);
+  ok(Math.abs(shownWorst[Number(M.ROUGH.lowPh).toFixed(2)] - Number(M.ROUGH.low)) <= 0.1 && Math.abs(shownWorst[Number(M.ROUGH.highPh).toFixed(2)] - Number(M.ROUGH.high)) <= 0.1,
+    `memo: rough check drifts ${shownWorst[Number(M.ROUGH.lowPh).toFixed(2)].toFixed(2)} at ${M.ROUGH.lowPh} and ${shownWorst[Number(M.ROUGH.highPh).toFixed(2)].toFixed(2)} at ${M.ROUGH.highPh}, as the card says`);
+  const ex = M.TRICK.rough.trick.match(/pH of (7\.\d\d) means a PaCO2 of about (\d+)/);
+  ok(ex && shownWorst[ex[1]] <= 2, `memo: the rough check's own example (${ex && ex[1]}) is one where it works well (off by ${ex && shownWorst[ex[1]].toFixed(2)})`);
+  const worstExact = worstShown;
+  // the Leitner boxes
+  let st = { box: 1, due: 0 };
+  st = M.review(st, true, 100); const s2 = st.box === 2 && st.due === 102;
+  st = M.review(st, true, 102); const s3 = st.box === 3 && st.due === 106;
+  st = M.review(st, false, 106); const s1 = st.box === 1 && st.due === 106;
+  let top = { box: 5, due: 0 }; top = M.review(top, true, 200);
+  ok(s2 && s3 && s1 && top.box === 5 && top.due === 216, 'memo: Leitner: right moves up a box (2, 4, 8, 16 days), wrong goes back to box 1');
+  const memo = { cards: Object.fromEntries(M.FLASHCARDS.slice(0, 5).map((c, i) => [c.id, { box: i + 1, due: 1000 + i }])) };
+  ok(M.learnedCount(memo) === 3 && M.dueCards(memo, 1001).length === M.FLASHCARDS.length - 3, 'memo: learned and due counts');
+  // the brain dump key
+  ok(M.DUMP.every((d) => d.title && d.key.length) && M.DUMP.some((d) => d.key.join(' ').includes(`${f(wa)} × HCO3 + ${f(wb)}`)), 'memo: the brain dump key is complete');
+  log.push(`memorize ✓ ${M.TRICKS.length} trick cards, ${M.FLASHCARDS.length} flashcards, ${M.BUILD.length} formulas to build, ${M.CLOZE.length} blanks, the speed round and the rough check (worst ${worstExact.toFixed(2)} mmHg over pH ${M.ROUGH.from}–${M.ROUGH.to})`);
+}
 
 // ---------- 2. random problems, both ways ----------
 const PROFILES = [

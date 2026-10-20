@@ -51,9 +51,36 @@ simple, which glosses over the acidosis/acidemia distinction on purpose.
 - Hypoxemia is only "low", with no mild/moderate/severe bands, because the cutoffs differ between sources.
 - Random SaO2 values come from the PaO2 through Severinghaus's equation (J Appl Physiol 1979), so they're plausible.
 
+## Memory tricks (`app/js/memo.js`)
+
+Each card is labeled in the app. Standard means a long-standing teaching mnemonic or a published rule; made up means
+I invented the hook, though the numbers it helps you remember are standard.
+
+| Card | Label | Where it comes from |
+|---|---|---|
+| The 35–45 twins (pH 7.35–7.45, PaCO2 35–45) | Standard | Common nursing teaching |
+| Bicarb: 24, give or take 2 ("hours in a day") | Made up | The range is standard; the hook is mine |
+| Oxygen: a B and an A (PaO2 80–100, SaO2 95–100) | Made up | Ranges standard; the curve drawn is Severinghaus 1979 |
+| CO2 is an acid, bicarb is a base | Standard | Standard physiology (CO2 + H2O ⇌ H2CO3 ⇌ H+ + HCO3−) |
+| ROME | Standard | Common nursing teaching |
+| Tic-tac-toe | Standard | Common nursing teaching |
+| Lungs fast, kidneys slow; never past 7.40 | Standard | Standard physiology and teaching (the "never overcompensates" rule is a teaching simplification) |
+| Kidneys over lungs; 20:1; 6.1 and 0.03 | Standard idea, made-up wording | Henderson-Hasselbalch |
+| Winters' formula ("one and a half bicarb plus eight") | Standard | Albert, Dell and Winters 1967 |
+| The pH shortcut (last two digits of the pH) | Rough check only | A common bedside shortcut. Med Math measured it with the pH as written: within about 3.5 mmHg of Winters' from pH 7.13 to 7.33 (worst 3.6 near 7.26), about 4.7 off at 7.10 and 4.3 at 7.34. tools/tests.js recomputes these. |
+| Point seven (metabolic alkalosis) | Made up | The formula is standard |
+| 1, 3.5, 2, 4 ("acute small, chronic big, alkalosis doubles the acute") | Standard idea, made-up wording | The factors match the module's problems; sources vary (1-4-2-5 is also taught) |
+| The anion gap ("about 10, give or take 2") | Standard idea, made-up wording | Kraut and Madias 2007 |
+| Two and a half per gram | Standard | Figge et al. 1998 |
+| MUDPILES | Standard | Long-standing teaching mnemonic (older list) |
+| GOLDMARK | Standard | Mehta, Emmett and Emmett, The Lancet 372 (2008), p. 892 (the newer list) |
+| P over F | Made up | The formula is standard; Berlin definition, JAMA 2012 |
+| The Allen test in 3 steps (5–15 seconds) | Standard | StatPearls, "Allen Test"; procedures differ on the exact seconds |
+
 ## Things a reviewer might want changed
 
 - Whether the default normal ranges match the programs most students are in.
 - The chronic compensation factors (3.5 and 4).
 - The timing in the press-site card ("at least five minutes", "longer" on blood thinners) and whether to name one.
 - Any card where the "best" answer still sounds too clinical for a real patient.
+- Whether the made-up hooks help, and whether the pH shortcut should be shown at all.

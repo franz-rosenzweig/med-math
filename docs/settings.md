@@ -45,7 +45,7 @@ has to stay on.
 
 ## Progress
 
-**Reset progress** clears every topic's score and your last 50 answers. It asks you to tap again before it does
+**Reset progress** clears every topic's score, your last 50 answers, the flashcard boxes and your speed-round best. It asks you to tap again before it does
 anything, because it can't be undone. Settings aren't touched.
 
 If the browser won't let Med Math save anything (some private windows), Settings says so at the top, and your

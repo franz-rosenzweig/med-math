@@ -4,6 +4,7 @@ import { DEFAULT_SETTINGS } from './rules.js';
 
 const KEY_SETTINGS = 'med-math:settings:v1';
 const KEY_PROGRESS = 'med-math:progress:v1';
+const KEY_MEMO = 'med-math:memo:v1';
 const memory = {};
 
 function read(key) {
@@ -74,3 +75,12 @@ export function storageWorks() {
     return true;
   } catch { return false; }
 }
+
+// Flashcard boxes and the speed-round best, for "Memorize it".
+export function loadMemo() {
+  const m = read(KEY_MEMO);
+  if (!m || typeof m !== 'object' || typeof m.cards !== 'object' || m.cards === null) return { cards: {}, speedBest: 0 };
+  return { cards: m.cards, speedBest: Number(m.speedBest) || 0 };
+}
+export function saveMemo(m) { return write(KEY_MEMO, m); }
+export function resetMemo() { const m = { cards: {}, speedBest: 0 }; write(KEY_MEMO, m); return m; }
