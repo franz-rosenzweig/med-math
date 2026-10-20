@@ -13,6 +13,8 @@ import { TOPICS, buildProblem, generateProblem, seeded } from '../app/js/topics.
 import { byFormula, roundDp } from '../app/js/formulas.js';
 import { judge, parseNumber, parseClock } from '../app/js/answer.js';
 import { DEFAULT_SETTINGS } from '../app/js/rules.js';
+import { readTTT } from '../app/js/abg.js';
+import { TALK, KINDS } from '../app/js/talk.js';
 
 const failures = [];
 const log = [];
@@ -26,6 +28,8 @@ const eqNum = (a, b) => Math.abs(a - b) < 1e-9 * Math.max(1, Math.abs(b));
 
 // The key as a plain number string, for comparing with the formula answer.
 const keyNumber = (p) => (p.answer.type === 'number' ? Number(p.answer.key.toFixedString(9)) : p.answer.key);
+const sameKey = (a, b) => (a && b && typeof a === 'object' ? a.d === b.d && a.c === b.c : a === b);
+const hhPH = (hco3, paco2) => 6.1 + Math.log10(hco3 / (0.03 * paco2));
 
 // ---------- 1. fixed cases ----------
 const D = DEFAULT_SETTINGS;
@@ -84,6 +88,79 @@ for (const f of FIXED) {
   log.push(`fixed ✓ ${f.name}`);
 }
 
+// ---------- 1b. fixed blood gas cases ----------
+const ABG_FIXED = [
+  [7.30, 50, 24, 'resp-acid', 'uncomp'], [7.48, 30, 24, 'resp-alk', 'uncomp'], [7.30, 40, 18, 'met-acid', 'uncomp'],
+  [7.50, 40, 30, 'met-alk', 'uncomp'], [7.33, 30, 16, 'met-acid', 'partial'], [7.37, 55, 31, 'resp-acid', 'full'],
+  [7.44, 30, 20, 'resp-alk', 'full'], [7.25, 60, 18, 'mixed-acid', 'none'], [7.40, 40, 24, 'normal', 'none'],
+];
+for (const [ph, paco2, hco3, d, c] of ABG_FIXED) {
+  const where = `fixed ABG ${ph.toFixed(2)}/${paco2}/${hco3}`;
+  let p;
+  try { p = buildProblem('abg', { ph, paco2, hco3 }, D); } catch (e) { ok(false, `${where}: build threw ${e.message}`); continue; }
+  ok(p.answer.key.d === d && p.answer.key.c === c, `${where}: read as ${p.answer.key.d}/${p.answer.key.c}, want ${d}/${c}`);
+  const fx = byFormula('abg', { ph, paco2, hco3 }, D);
+  ok(fx.value && fx.value.d === d && fx.value.c === c, `${where}: ROME way says ${JSON.stringify(fx.value)}`);
+  ok(judge(p, { d, c: c === 'none' ? '' : c }, D).state === 'right', `${where}: the right reading counts`);
+  ok(judge(p, { d: d === 'normal' ? 'resp-acid' : 'normal', c: 'uncomp' }, D).state === 'wrong', `${where}: a wrong reading doesn't`);
+  if (c !== 'none') ok(judge(p, { d, c: c === 'full' ? 'partial' : 'full' }, D).state === 'wrong', `${where}: the wrong compensation doesn't count`);
+  log.push(`fixed ✓ ${where} → ${d}${c === 'none' ? '' : ', ' + c}`);
+}
+{
+  const p = buildProblem('hh', { hco3: 24, paco2: 40 }, D);
+  ok(p.answer.key.eq('7.4') && p.answer.key.toFixedString(2) === '7.40', `fixed HH 24/40: key ${p.answer.key.toFixedString(2)}, want 7.40`);
+  ok(eqNum(byFormula('hh', { hco3: 24, paco2: 40 }, D).value, 7.4), 'fixed HH 24/40: formula way gives 7.40');
+  ok(judge(p, '7.40', D).state === 'right' && judge(p, '7.4', D).state === 'right' && judge(p, '7.401', D).state === 'right' && judge(p, '7.41', D).state === 'wrong', 'fixed HH 24/40: 7.40, 7.4 and 7.401 count, 7.41 does not');
+  log.push('fixed ✓ Henderson-Hasselbalch HCO3 24, PaCO2 40 → 7.40');
+  const w = buildProblem('comp', { kind: 'met-acid', ask: 'expected', hco3: 12 }, D);
+  ok(w.answer.key.eq(26) && w.facts.lo.eq(24) && w.facts.hi.eq(28), `fixed Winters HCO3 12: ${fmt(w.answer.key)} (${fmt(w.facts.lo)}–${fmt(w.facts.hi)}), want 26 (24–28)`);
+  ok(eqNum(byFormula('comp', { kind: 'met-acid', ask: 'expected', hco3: 12 }, D).value, 26), 'fixed Winters HCO3 12: formula way gives 26');
+  log.push('fixed ✓ Winters’ formula HCO3 12 → 26 (24–28)');
+  const g1 = buildProblem('gap', { kind: 'ag', na: 140, cl: 104, hco3: 12 }, D);
+  const g2 = buildProblem('gap', { kind: 'high', na: 140, cl: 104, hco3: 12 }, D);
+  ok(g1.answer.key.eq(24) && g2.answer.key === 'high', `fixed anion gap 140/104/12: ${fmt(g1.answer.key)}, ${g2.answer.key}; want 24, high`);
+  ok(byFormula('gap', { kind: 'ag', na: 140, cl: 104, hco3: 12 }, D).value === 24 && byFormula('gap', { kind: 'high', na: 140, cl: 104, hco3: 12 }, D).value === 'high', 'fixed anion gap: formula way agrees');
+  log.push('fixed ✓ Anion gap Na 140, Cl 104, HCO3 12 → 24 (high)');
+  const c1 = buildProblem('gap', { kind: 'corr', na: 140, cl: 106, hco3: 24, alb: 2 }, D);
+  ok(c1.answer.key.eq(15), `corrected gap 10 with albumin 2: ${fmt(c1.answer.key)}, want 15`);
+  const pf = buildProblem('oxygen', { kind: 'pf', pao2: 80, fio2: 0.4, fio2As: '%' }, D);
+  ok(pf.answer.key.eq(200) && judge(pf, '200', D).state === 'right', `P/F 80 on 40%: ${fmt(pf.answer.key)}, want 200`);
+  const pf2 = buildProblem('oxygen', { kind: 'pf', pao2: 95, fio2: 0.21, fio2As: 'frac' }, D);
+  ok(pf2.answer.key.eq(452) && byFormula('oxygen', { kind: 'pf', pao2: 95, fio2: 0.21, fio2As: 'frac' }, D).value === 452, `P/F 95 on room air: ${fmt(pf2.answer.key)}, want 452`);
+  log.push('fixed ✓ P/F 80 ÷ 0.40 → 200, 95 ÷ 0.21 → 452; corrected gap 10 + 2.5 × 2 → 15');
+}
+
+// every combination on a grid, both ways of reading an ABG must agree (including "doesn't fit")
+{
+  let n = 0, agree = 0;
+  for (let ph100 = 690; ph100 <= 775; ph100++) {
+    const ph = ph100 / 100;
+    for (let paco2 = 12; paco2 <= 95; paco2++) {
+      for (let hco3 = 4; hco3 <= 52; hco3++) {
+        n++;
+        const a = readTTT({ ph, paco2, hco3 });
+        const b = byFormula('abg', { ph, paco2, hco3 }, D).value;
+        const same = (!a && !b) || (a && b && a.d === b.d && a.c === b.c);
+        if (same) agree++;
+        else if (agree + 20 > n) ok(false, `grid ${ph}/${paco2}/${hco3}: tic-tac-toe ${JSON.stringify(a && { d: a.d, c: a.c })}, ROME ${JSON.stringify(b)}`);
+      }
+    }
+  }
+  ok(agree === n, `ABG grid: ${agree} of ${n} combinations read the same both ways`);
+  log.push(`grid ✓ ${n.toLocaleString()} pH/PaCO2/HCO3 combinations read the same by tic-tac-toe and by ROME`);
+}
+
+// the talk cards: one best answer each, every option explained, a model answer
+for (const c of TALK) {
+  const where = `talk card ${c.id}`;
+  ok(c.options.length >= 3 && c.options.length <= 4, `${where}: 3 or 4 options`);
+  ok(c.options.filter((o) => o.kind === 'best').length === 1, `${where}: exactly one best answer`);
+  ok(new Set(c.options.map((o) => o.id)).size === c.options.length && new Set(c.options.map((o) => o.text)).size === c.options.length, `${where}: options are all different`);
+  ok(c.options.every((o) => o.text && o.why && KINDS[o.kind]), `${where}: every option says why`);
+  ok(c.model && c.model.length > 80 && c.scene && c.says && c.who, `${where}: has a scene and a model answer`);
+}
+log.push(`talk ✓ ${TALK.length} cards, each with one best answer and every option explained`);
+
 // ---------- 2. random problems, both ways ----------
 const PROFILES = [
   { name: 'default', n: 1000, s: { ...DEFAULT_SETTINGS } },
@@ -93,9 +170,10 @@ const PROFILES = [
 
 function textOf(p) { return [...p.lines.map((l) => `${l.label}: ${l.text}`), p.ask].join('\n'); }
 function shows(text, x) {
-  const t = fmt(Q.of(x));
-  const esc = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`(^|[^\\d.,])${esc}(?![\\d]|[.,]\\d)`).test(text);
+  return [fmt(Q.of(x)), Q.of(x).toFixedString(2)].some((t) => {
+    const esc = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`(^|[^\\d.,])${esc}(?![\\d]|[.,]\\d)`).test(text);
+  });
 }
 const BOUNDS = {
   tablets: (p) => p.answer.exact.eq(p.answer.key) && p.answer.key.ge('0.5') && p.answer.key.le(3),
@@ -112,6 +190,12 @@ const BOUNDS = {
   metric: (p) => p.answer.key.gt(0),
   household: (p) => p.answer.key.gt(0),
   safe: () => true,
+  abg: (p) => p.given.ph >= 6.95 && p.given.ph <= 7.7 && p.given.paco2 >= 12 && p.given.paco2 <= 95 && p.given.hco3 >= 4 && p.given.hco3 <= 50,
+  oxygen: (p) => (p.answer.type === 'number' ? p.answer.key.ge(40) && p.answer.key.le(650) : p.given.pao2 >= 35 && p.given.pao2 <= 300),
+  hh: (p) => p.answer.key.ge('6.95') && p.answer.key.le('7.7'),
+  comp: (p) => (p.answer.type === 'number' ? p.answer.key.gt(8) && p.answer.key.lt(70) : p.given.ph >= 6.95 && p.given.ph <= 7.7),
+  gap: (p) => p.facts.ag.ge(3) && p.facts.ag.le(40) && p.given.cl >= 85 && p.given.cl <= 120,
+  talk: (p) => p.answer.options.length >= 3,
 };
 
 const summary = [];
@@ -130,8 +214,8 @@ for (const prof of PROFILES) {
       let fx;
       try { fx = byFormula(topic.id, p.given, prof.s); } catch (e) { ok(false, `${where}: formula threw ${e.message}`); continue; }
       const mine = keyNumber(p);
-      const agree = fx.type === p.answer.type && (typeof mine === 'number' ? eqNum(fx.value, mine) : fx.value === mine);
-      if (ok(agree, `${where}: train says ${typeof mine === 'number' ? mine : mine}, formula says ${fx.value} — ${JSON.stringify(p.given)}`)) row.agree++;
+      const agree = fx.type === p.answer.type && (typeof mine === 'number' ? eqNum(fx.value, mine) : sameKey(mine, fx.value));
+      if (ok(agree, `${where}: train says ${JSON.stringify(mine)}, formula says ${JSON.stringify(fx.value)} — ${JSON.stringify(p.given)}`)) row.agree++;
       if (p.answer.type === 'choice') verdicts[p.answer.key] = (verdicts[p.answer.key] || 0) + 1;
       // every number the formulas used is printed in the problem
       const text = textOf(p);
@@ -159,7 +243,16 @@ for (const prof of PROFILES) {
         ok(judge(p, { h: Math.floor(p.answer.key / 60), m: p.answer.key % 60 }, prof.s).state === 'right', `${where}: duration key refused`);
       } else if (p.answer.type === 'choice') {
         ok(judge(p, p.answer.key, prof.s).state === 'right', `${where}: choice key refused`);
+        const other = p.answer.options.find((o) => o.id !== p.answer.key);
+        ok(judge(p, other.id, prof.s).state === 'wrong', `${where}: another choice accepted`);
+      } else if (p.answer.type === 'abg') {
+        const k = p.answer.key;
+        ok(judge(p, { d: k.d, c: k.c === 'none' ? '' : k.c }, prof.s).state === 'right', `${where}: ABG key refused`);
+        ok(judge(p, { d: k.d === 'normal' ? 'met-acid' : 'normal', c: 'partial' }, prof.s).state === 'wrong', `${where}: wrong ABG reading accepted`);
       }
+      // a blood gas has to hang together: Henderson-Hasselbalch within 0.03 of the pH shown
+      if (p.given.ph != null) ok(Math.abs(hhPH(p.given.hco3, p.given.paco2) - p.given.ph) <= 0.03, `${where}: implausible ABG ${JSON.stringify(p.given)} (HH gives ${hhPH(p.given.hco3, p.given.paco2).toFixed(3)})`);
+      if (p.given.sao2 != null) ok(p.given.sao2 >= 70 && p.given.sao2 <= 100 && (p.given.pao2 >= 80 ? p.given.sao2 >= 95 : true), `${where}: SaO2 doesn't fit the PaO2`);
       ok(BOUNDS[topic.id](p), `${where}: outside the realistic range — ${JSON.stringify(p.given)} → ${p.answer.key}`);
     }
     summary.push({ profile: prof.name, topic: topic.id, made: row.n, agree: row.agree, unique: row.unique.size, errors: row.errors, verdicts: Object.keys(verdicts).length ? verdicts : undefined });

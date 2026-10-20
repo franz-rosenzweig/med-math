@@ -22,14 +22,16 @@ fraction is a car, the units that cancel get struck through in pencil, and the c
 train there's the same answer done "the formula way" (D/H × Q and friends), which means you can check one method
 against the other.
 
-There's also a **Mixed quiz** of 10 problems with a score at the end, and a **Formula sheet** you can print. Basically,
-it's a practice book with an endless supply of problems, where every answer shows its working.
+There's also a **Mixed quiz** of 10 problems with a score at the end, and a **Formula sheet** you can print. And there's
+a whole section on arterial blood gases: reading an ABG, oxygenation, the Henderson-Hasselbalch equation, expected
+compensation, the anion gap, and practice explaining it all to patients, which has [its own page](blood-gases.md).
+Basically, it's a practice book with an endless supply of problems, where every answer shows its working.
 
 ## Who it's for
 
-Nursing students getting ready for a dosage calculation exam, and anyone who wants to keep these skills fresh. It
-covers 14 topics, from metric conversions up to titrations in mcg/kg/min, and [The 14 topics](topics.md) lists them
-all.
+Nursing students getting ready for a dosage calculation or blood gas exam, and anyone who wants to keep these skills
+fresh. It covers 14 dosage topics, from metric conversions up to titrations in mcg/kg/min, which [The 14
+topics](topics.md) lists, and six blood gas topics on the [Blood gases](blood-gases.md) page.
 
 ## How sure can you be of the answers?
 

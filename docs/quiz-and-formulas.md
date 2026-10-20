@@ -8,9 +8,10 @@ at the top.
 
 ## Taking a quiz
 
-A quiz picks 10 problems spread over the topics you've chosen in [Settings](settings.md) (all 14 unless you've
-changed it), so you won't get three heparin problems in a row. The row of little tickets at the top shows where you
-are.
+A quiz picks 10 problems spread over the topics you've chosen in [Settings](settings.md) (the 14 dosage topics
+unless you've changed it), so you won't get three heparin problems in a row. The row of little tickets at the top
+shows where you are. The blood gas topics have a quiz of their own, the **Blood gas quiz** in the Blood gases box on
+the home screen, and you can also add them to the mixed quiz in Settings.
 
 ![A quiz problem with the Next and Skip buttons](images/quiz-question.png)
 *Problem 1 of 10. You'll see how you did at the end.*
@@ -39,16 +40,18 @@ looking at the trains. **New quiz** makes a fresh set of 10.
 The formula sheet has every formula Med Math uses, written out with proper fractions: the train itself with an
 example, desired over have, IV pump rates, gravity drips, infusion time, weight-based doses, the safe-dose check,
 reconstitution, heparin, titrations and BSA. There's a table of conversions, and a card with your own rounding rules,
-which follows your settings, so if you switch pump rates to whole numbers the sheet says so too.
+which follows your settings, so if you switch pump rates to whole numbers the sheet says so too. Then the blood gas
+cards: the normal ranges, reading an ABG (the five steps, tic-tac-toe and ROME), Henderson-Hasselbalch, expected
+compensation, the anion gap, oxygenation and the P/F ratio, and the plain words for patients.
 
 ![The formula sheet](images/formula-sheet.png)
 *The whole formula sheet.*
 
-**Print** prints it on about two pages, without the buttons and the graph paper, which makes a decent study card to
+**Print** prints it on about four pages, without the buttons and the graph paper, which makes a decent study card to
 keep in a binder. Basically, it's the cheat sheet you're not allowed to bring to the exam, to learn from before it.
 
 ## Next step
 
 Take one quiz with all 14 topics on, and then press **Retry the misses** after you've looked at the trains.
 
-<sub>Next: [The 14 topics](topics.md) →</sub>
+<sub>Next: [Blood gases](blood-gases.md) →</sub>

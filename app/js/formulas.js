@@ -1,7 +1,10 @@
 // The second, independent way of working out every answer: the plain textbook formulas
 // (D/H × Q, V × drop factor ÷ T and so on) on ordinary numbers, with its own unit tables and its own
-// rounding. It shares nothing with topics.js / train.js / frac.js / rules.js. The test runner
+// rounding. It shares nothing with topics.js / abg.js / train.js / frac.js / rules.js (only the talk cards'
+// content, to look up which answer is marked best). The test runner
 // (tools/test.html) checks that both ways agree on thousands of problems.
+
+import { TALK } from './talk.js';
 
 const MCG = { mcg: 1, mg: 1000, g: 1000000, kg: 1000000000 };
 const ML = { mL: 1, L: 1000 };
@@ -155,6 +158,64 @@ export function byFormula(topic, g, s) {
       const bsa = settle('hundredths', Math.sqrt((g.cm * g.kg) / 3600), s);
       if (g.ask === 'bsa') return { type: 'number', value: bsa, used: [g.cm, g.kg], mid: { bsa } };
       return { type: 'number', value: settle('tenths', g.per * bsa, s), used: [g.cm, g.kg, g.per], mid: { bsa } };
+    }
+    // ----- blood gases -----
+    case 'abg': {
+      // ROME, on signs: -1 means "pushing toward acid", +1 "toward base", 0 in range
+      const s3 = (x, lo, hi, highIsBase) => (x > hi ? (highIsBase ? 1 : -1) : x < lo ? (highIsBase ? -1 : 1) : 0);
+      const p = s3(g.ph, 7.35, 7.45, true);
+      const r = s3(g.paco2, 35, 45, false); // high CO2 is acid
+      const m = s3(g.hco3, 22, 26, true);
+      const name = (resp, dir) => `${resp ? 'resp' : 'met'}-${dir < 0 ? 'acid' : 'alk'}`;
+      let value = null;
+      if (p !== 0) {
+        if (r === p && m === p) value = { d: `mixed-${p < 0 ? 'acid' : 'alk'}`, c: 'none' };
+        else if (r === p) value = { d: name(true, p), c: m === 0 ? 'uncomp' : 'partial' };
+        else if (m === p) value = { d: name(false, p), c: r === 0 ? 'uncomp' : 'partial' };
+      } else if (r === 0 && m === 0) value = { d: 'normal', c: 'none' };
+      else if (r !== 0 && m !== 0 && r === -m && g.ph !== 7.4) {
+        const side = g.ph < 7.4 ? -1 : 1;
+        value = { d: name(r === side, side), c: 'full' };
+      }
+      return { type: 'abg', value, used: [g.ph, g.paco2, g.hco3, ...(g.pao2 ? [g.pao2, g.sao2] : [])] };
+    }
+    case 'oxygen': {
+      if (g.kind === 'class') {
+        const v = g.pao2 < 80 ? 'low' : g.pao2 > 100 ? 'high' : 'normal';
+        return { type: 'choice', value: v, used: [g.pao2, g.sao2] };
+      }
+      return { type: 'number', value: settle('whole', g.pao2 / g.fio2, s), used: [g.pao2, g.fio2As === '%' ? Math.round(g.fio2 * 100) : g.fio2] };
+    }
+    case 'hh': {
+      const ph = 6.1 + Math.log(g.hco3 / (0.03 * g.paco2)) / Math.LN10;
+      return { type: 'number', value: settle('hundredths', ph, s), used: [g.hco3, g.paco2], mid: { ph } };
+    }
+    case 'comp': {
+      let expected;
+      if (g.kind === 'met-acid') expected = 1.5 * g.hco3 + 8;
+      else if (g.kind === 'met-alk') expected = 40 + 0.7 * (g.hco3 - 24);
+      else if (g.kind === 'resp-acid') expected = 24 + ((g.paco2 - 40) / 10) * (g.chronic ? 3.5 : 1);
+      else expected = 24 - ((40 - g.paco2) / 10) * (g.chronic ? 4 : 2);
+      const met = g.kind.startsWith('met');
+      if (g.ask === 'expected') return { type: 'number', value: settle('tenths', expected, s), used: [met ? g.hco3 : g.paco2], mid: { expected } };
+      const actual = met ? g.paco2 : g.hco3;
+      const e = 1e-9;
+      let v = 'none';
+      if (actual > expected + 2 + e) v = met ? 'resp-acid' : 'met-alk';
+      else if (actual < expected - 2 - e) v = met ? 'resp-alk' : 'met-acid';
+      return { type: 'choice', value: v, used: [g.ph, g.paco2, g.hco3], mid: { expected } };
+    }
+    case 'gap': {
+      const ag = g.na - g.cl - g.hco3;
+      const used = [g.na, g.cl, g.hco3];
+      if (g.kind === 'high') return { type: 'choice', value: ag > 12 ? 'high' : 'normal', used, mid: { ag } };
+      if (g.kind === 'corr') return { type: 'number', value: settle('tenths', ag + 2.5 * (4 - g.alb), s), used: [...used, g.alb], mid: { ag } };
+      return { type: 'number', value: settle('whole', ag, s), used, mid: { ag } };
+    }
+    case 'talk': {
+      const card = TALK.find((c) => c.id === g.card);
+      const best = card.options.filter((o) => o.kind === 'best');
+      return { type: 'choice', value: best.length === 1 ? best[0].id : null, used: [] };
     }
     default: throw new Error('No formula for ' + topic);
   }

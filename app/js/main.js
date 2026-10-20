@@ -1,5 +1,8 @@
 // Med Math: screens, practice, quiz, formula sheet and settings. Plain ES modules, no build step.
-import { TOPICS, TOPIC, GROUPS, generateProblem, buildProblem, seeded, amountText } from './topics.js';
+import { TOPICS, TOPIC, GROUPS, generateProblem, buildProblem, seeded, amountText, ABG_IDS, DOSAGE_IDS } from './topics.js';
+import { RANGE_TEXT, abgLabel, VARY } from './abg.js';
+import { GLOSSARY } from './talk.js';
+import { drawFigure } from './abgview.js';
 import { judge } from './answer.js';
 import { drawTrain } from './trainview.js';
 import { fmt, fmtClock, fmtDuration } from './fmt.js';
@@ -56,7 +59,8 @@ function unitLabel(a) {
 }
 function keyText(p) {
   const a = p.answer;
-  if (a.type === 'number') return a.unit === 'tab' || a.unit === 'cap' ? amountText(a.key, a.unit) : `${fmt(a.key)} ${a.unit}`;
+  if (a.type === 'number') return a.unit === 'tab' || a.unit === 'cap' ? amountText(a.key, a.unit) : `${a.fixed ? a.key.toFixedString(a.fixed) : fmt(a.key)} ${a.unit}`.trim();
+  if (a.type === 'abg') return abgLabel(a.key);
   if (a.type === 'clock') return fmtClock(a.key, state.settings.clock) + (a.nextDay ? ' (the next day)' : '');
   if (a.type === 'duration') return fmtDuration(a.key);
   return a.options.find((o) => o.id === a.key).label;
@@ -64,6 +68,7 @@ function keyText(p) {
 function inputText(p, input) {
   const a = p.answer;
   if (input == null || input === '') return 'no answer';
+  if (a.type === 'abg') return input.d ? abgLabel({ d: input.d, c: input.c || 'uncomp' }).replace(/, uncompensated$/, input.c ? ', uncompensated' : '') : 'no answer';
   if (a.type === 'choice') return a.options.find((o) => o.id === input)?.label ?? input;
   if (a.type === 'duration') {
     if (!input.h && !input.m) return 'no answer';
@@ -100,7 +105,7 @@ function route() {
   const [screen, arg] = h.split('/');
   document.body.dataset.screen = screen || 'home';
   if (screen === 'practice' && TOPIC[arg]) return showPractice(arg);
-  if (screen === 'quiz') return showQuiz();
+  if (screen === 'quiz') return showQuiz(arg === 'abg' ? 'abg' : 'mixed');
   if (screen === 'formulas') return showFormulas();
   if (screen === 'settings') return showSettings();
   return showHome();
@@ -128,19 +133,24 @@ function renderSteps(box, p, { animate = true } = {}) {
   const items = p.steps.map((st, i) => {
     const li = document.createElement('li');
     li.className = 'step';
-    li.innerHTML = `<span class="step-n" aria-hidden="true">${i + 1}</span><div class="step-body"><p>${rich(st.say)}</p>${st.train ? '<div class="figure"></div>' : ''}</div>`;
+    li.innerHTML = `<span class="step-n" aria-hidden="true">${i + 1}</span><div class="step-body"><p>${rich(st.say)}</p>${st.train || st.fig ? `<div class="figure${st.fig ? ' fig-' + st.fig.kind : ''}"></div>` : ''}</div>`;
     ol.append(li);
     return { li, st };
   });
   const formula = document.createElement('div');
   formula.className = 'formula-way';
-  formula.innerHTML = `<span class="fw-label">The formula way</span><p>${esc(p.formula)}</p>`;
+  formula.innerHTML = `<span class="fw-label">${esc(p.formulaLabel || 'The formula way')}</span><p>${esc(p.formula)}</p>`;
   box.append(formula);
 
   const drawInto = (it, animateIt) => {
     const fig = $('.figure', it.li);
     if (!fig) return 0;
     fig.innerHTML = '';
+    if (it.st.fig) {
+      fig.append(drawFigure(it.st.fig, trainWidth(fig)));
+      fig.dataset.w = trainWidth(fig);
+      return 900;
+    }
     const { svg, duration } = drawTrain(it.st.train, { width: trainWidth(fig), animate: animateIt });
     fig.append(svg);
     fig.dataset.w = trainWidth(fig);
@@ -158,7 +168,7 @@ function renderSteps(box, p, { animate = true } = {}) {
     it.li.hidden = false;
     it.li.classList.add('arrive');
     const d = drawInto(it, true);
-    later(() => reveal(i + 1), it.st.train ? d + 150 : 650);
+    later(() => reveal(i + 1), it.st.train || it.st.fig ? d + 150 : 650);
   };
   reveal(0);
 }
@@ -183,7 +193,7 @@ function showHome() {
     <section class="hero">
       <div class="hero-words">
         <h1>Dosage math, worked out <span class="hand">car by car</span>.</h1>
-        <p class="lede">Free practice for nursing students. Every problem reads like a real order, and every answer comes with the train that works it out, so you can see why the units cancel.</p>
+        <p class="lede">Free practice for nursing students, from dosage calculations to blood gases. Every problem reads like the real thing, and every answer comes with the working, as a train where the units cancel.</p>
         <div class="hero-actions">
           <a class="btn primary big ticket" href="#/quiz">${icon('ticket')}<span>Mixed quiz<small>10 problems</small></span></a>
           <a class="btn big" href="#/formulas">${icon('sheet')}<span>Formula sheet<small>to print</small></span></a>
@@ -198,7 +208,7 @@ function showHome() {
     <section class="lines" aria-labelledby="lines-h">
       <h2 id="lines-h">Pick a topic</h2>
       <div class="line-grid">
-        ${GROUPS.map((g) => `
+        ${GROUPS.filter((g) => g.id !== 'abg').map((g) => `
           <div class="line">
             <h3><span class="line-cap" aria-hidden="true"></span>${esc(g.name)}</h3>
             <ul class="stations">
@@ -213,6 +223,26 @@ function showHome() {
             </ul>
           </div>`).join('')}
       </div>
+    </section>
+
+    <section class="abg-home" aria-labelledby="abg-h">
+      <div class="abg-head">
+        <div>
+          <h2 id="abg-h"><span class="line-cap" aria-hidden="true"></span>Blood gases</h2>
+          <p>Reading an ABG with ROME and tic-tac-toe, oxygen, the Henderson-Hasselbalch equation, compensation, the anion gap, and how to explain it all to a patient.</p>
+        </div>
+        <a class="btn big ticket" href="#/quiz/abg">${icon('ticket')}<span>Blood gas quiz<small>10 problems</small></span></a>
+      </div>
+      <ul class="stations abg-stations">
+        ${GROUPS.find((g) => g.id === 'abg').topics.map((id) => {
+          const t = TOPIC[id], st = topicStats(id);
+          return `<li><a class="station" href="#/practice/${id}">
+            ${ring(id)}
+            <span class="st-words"><span class="st-name">${esc(t.name)}</span><span class="st-hint">${esc(t.hint)}</span></span>
+            <span class="st-score">${st.total ? `${st.right} of ${st.total}` : 'new'}</span>
+          </a></li>`;
+        }).join('')}
+      </ul>
     </section>
 
     <section class="recent" aria-labelledby="recent-h">
@@ -264,8 +294,18 @@ function slipHTML(p, { mode }) {
       <label class="field small"><span class="sr">Hours</span><input id="ans" type="text" inputmode="numeric" autocomplete="off" enterkeyhint="next"><span class="unit" aria-hidden="true">h</span></label>
       <label class="field small"><span class="sr">Minutes</span><input id="ans-m" type="text" inputmode="numeric" autocomplete="off" enterkeyhint="done"><span class="unit" aria-hidden="true">min</span></label>
     </div>`;
+  } else if (a.type === 'abg') {
+    const group = (name, label, opts) => `<div class="abg-group" data-name="${name}"><span class="abg-q" id="abg-${name}">${label}</span>
+      <div class="choices seg3" role="radiogroup" aria-labelledby="abg-${name}" data-group="${name}">
+        ${opts.map((o, i) => `<button type="button" class="choice" role="radio" aria-checked="false" data-id="${o.id}" ${i ? 'tabindex="-1"' : ''}>${esc(o.label)}</button>`).join('')}
+      </div></div>`;
+    field = `<div class="abg-answer">
+      ${group('s', 'The blood is', [{ id: 'normal', label: 'Normal' }, { id: 'acid', label: 'Acidosis' }, { id: 'alk', label: 'Alkalosis' }])}
+      ${group('k', 'Caused by', [{ id: 'resp', label: 'Respiratory' }, { id: 'met', label: 'Metabolic' }, { id: 'mixed', label: 'Both (mixed)' }])}
+      ${group('c', 'Compensation', [{ id: 'uncomp', label: 'None' }, { id: 'partial', label: 'Partial' }, { id: 'full', label: 'Full' }])}
+    </div>`;
   } else {
-    field = `<div class="choices" role="radiogroup" aria-label="Your answer">
+    field = `<div class="choices${a.options.some((o) => o.label.length > 60) ? ' long' : ''}" role="radiogroup" aria-label="Your answer">
       ${a.options.map((o, i) => `<button type="button" class="choice" role="radio" aria-checked="false" data-id="${o.id}" ${i ? 'tabindex="-1"' : ''}>${esc(o.label)}</button>`).join('')}
     </div>`;
   }
@@ -277,7 +317,8 @@ function slipHTML(p, { mode }) {
        <button type="button" class="btn quiet" id="skip">Skip</button>`;
   return `<article class="slip">
     <header class="slip-head"><span class="slip-tag">${esc(TOPIC[p.topic].name)}</span></header>
-    <dl class="slip-lines">${p.lines.map((l) => `<div><dt>${esc(l.label)}</dt><dd>${esc(l.text)}</dd></div>`).join('')}</dl>
+    <dl class="slip-lines${p.lines.some((l) => l.text.length > 70) ? ' stacked' : ''}">${p.lines.map((l) => `<div><dt>${esc(l.label)}</dt><dd>${esc(l.text)}</dd></div>`).join('')}</dl>
+    ${p.ranges ? `<div class="ranges" aria-label="Normal ranges"><span class="ranges-h">Normal</span>${RANGE_TEXT.map(([k, v]) => `<span><b>${k}</b> ${v}</span>`).join('')}</div>` : ''}
     <p class="slip-ask" id="ask">${esc(p.ask)}</p>
     <form class="answer" id="answer-form" aria-labelledby="ask">
       <div class="answer-row">${field}</div>
@@ -292,23 +333,42 @@ function slipHTML(p, { mode }) {
 function readInput(p) {
   const a = p.answer;
   if (a.type === 'choice') return $('.choice[aria-checked="true"]', view)?.dataset.id ?? '';
+  if (a.type === 'abg') {
+    const pickOf = (g) => $(`[data-group="${g}"] .choice[aria-checked="true"]`, view)?.dataset.id ?? '';
+    const st = pickOf('s'), k = pickOf('k');
+    const d = st === 'normal' ? 'normal' : st && k ? (k === 'mixed' ? `mixed-${st}` : `${k}-${st}`) : '';
+    return { d, c: pickOf('c') };
+  }
   if (a.type === 'duration') return { h: $('#ans', view).value, m: $('#ans-m', view).value };
   return $('#ans', view).value;
 }
 
-function bindChoices(onPick) {
-  const choices = $$('.choice', view);
-  const pickOne = (btn) => {
-    choices.forEach((c) => { c.setAttribute('aria-checked', c === btn ? 'true' : 'false'); c.tabIndex = c === btn ? 0 : -1; });
-    onPick && onPick(btn.dataset.id);
-  };
-  choices.forEach((c, i) => {
-    c.addEventListener('click', () => pickOne(c));
-    c.addEventListener('keydown', (e) => {
-      const d = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
-      if (d) { e.preventDefault(); const n = choices[(i + d + choices.length) % choices.length]; pickOne(n); n.focus(); }
+function bindChoices(p) {
+  for (const group of $$('.choices', view)) {
+    const choices = $$('.choice', group);
+    const pickOne = (btn) => {
+      choices.forEach((c) => { c.setAttribute('aria-checked', c === btn ? 'true' : 'false'); c.tabIndex = c === btn ? 0 : -1; });
+      // a normal reading has no cause or compensation to pick, and a mixed one no compensation
+      if (p && p.answer.type === 'abg') {
+        const picked = (g) => $(`[data-group="${g}"] .choice[aria-checked="true"]`, view)?.dataset.id;
+        const normal = picked('s') === 'normal';
+        const setOff = (g, off) => {
+          const box = $(`[data-group="${g}"]`, view);
+          box.closest('.abg-group').classList.toggle('off', off);
+          $$('.choice', box).forEach((c) => { c.disabled = off; if (off) c.setAttribute('aria-checked', 'false'); });
+        };
+        setOff('k', normal);
+        setOff('c', normal || picked('k') === 'mixed');
+      }
+    };
+    choices.forEach((c, i) => {
+      c.addEventListener('click', () => pickOne(c));
+      c.addEventListener('keydown', (e) => {
+        const d = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
+        if (d) { e.preventDefault(); const n = choices[(i + d + choices.length) % choices.length]; if (n.disabled) return; pickOne(n); n.focus(); }
+      });
     });
-  });
+  }
 }
 
 function lockInputs() {
@@ -321,6 +381,7 @@ function emptyMessage(p, state_) {
     if (p.answer.type === 'clock') return state.settings.clock === '12' ? 'Write the time like 3:45 PM.' : 'Write the time like 15:45.';
     return 'That doesn’t look like a number. Try something like 2.5 or 0.75.';
   }
+  if (p.answer.type === 'abg') return 'Pick one in each list.';
   return p.answer.type === 'choice' ? 'Pick one first.' : 'Type your answer first.';
 }
 
@@ -366,11 +427,16 @@ function renderPractice() {
     </div>`;
   const body = $('#showme-body');
   resizer.observe(body);
+  if (p.topic === 'talk') {
+    $('.waiting', body).innerHTML = `<h3 class="gloss-h">Plain words</h3><dl class="glossary">${GLOSSARY.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>`;
+  }
   const waitFig = $('#wait-fig');
   const waitDraw = () => {
+    if (!waitFig) return;
     waitFig.innerHTML = '';
     const a = p.answer;
-    const unit = a.type === 'number' ? (a.unit === 'tab' || a.unit === 'cap' ? a.unit : a.unit) : a.type === 'choice' ? 'safe?' : a.type === 'clock' ? 'time' : 'h, min';
+    const LABEL = { abg: 'ABG', hh: 'pH', oxygen: a.type === 'number' ? 'P/F' : 'O2', comp: a.type === 'number' ? a.unit : '2nd?', gap: a.type === 'number' ? 'gap' : 'gap?', safe: 'safe?' };
+    const unit = LABEL[p.topic] || (a.type === 'number' ? a.unit : a.type === 'clock' ? 'time' : a.type === 'duration' ? 'h, min' : '?');
     const { svg } = drawTrain({ want: { n: [], d: [] }, cars: [], unit: unit }, { width: trainWidth(waitFig), engineOnly: true });
     waitFig.append(svg);
   };
@@ -381,7 +447,7 @@ function renderPractice() {
   $('#showme').addEventListener('click', showMePractice);
   $('#next').addEventListener('click', nextPractice);
   $('#replay').addEventListener('click', () => { renderSteps(body, p, { animate: true }); });
-  if (p.answer.type === 'choice') bindChoices();
+  if (p.answer.type === 'choice' || p.answer.type === 'abg') bindChoices(p);
   if (p.answer.type === 'duration') {
     $('#ans').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !$('#ans-m').value && !pr.checked) { e.preventDefault(); $('#ans-m').focus(); } });
   }
@@ -414,9 +480,11 @@ function checkPractice() {
     if (r.note === 'more') msg = `<strong>Right.</strong> Rounded ${esc(p.answer.ruleText)}, that’s ${esc(keyText(p))}.`;
     if (r.note === 'alt') msg = `<strong>That works.</strong> Rounding along the way the usual way gives ${esc(keyText(p))}, and both count.`;
   } else {
-    msg = `<strong>Not quite.</strong> It’s ${esc(keyText(p))}.`;
+    msg = p.answer.type === 'choice' && p.answer.options.some((o) => o.why) ? '' : `<strong>Not quite.</strong> It’s ${esc(keyText(p))}.`;
   }
   if (pr.peeked) msg += ' <span class="muted">(Not counted, since you looked first.)</span>';
+  const chosen = p.answer.type === 'choice' && p.answer.options.find((o) => o.id === input);
+  if (chosen && chosen.why) msg = `<strong>${ok ? 'Right.' : 'Not the best one.'}</strong> <span class="why-kind">${esc(chosen.kind)}:</span> ${esc(chosen.why)}${ok ? '' : ' Show me has the best one, and why.'}${pr.peeked ? ' <span class="muted">(Not counted, since you looked first.)</span>' : ''}`;
   fb.className = 'feedback ' + (ok ? 'right' : 'wrong');
   fb.innerHTML = `${icon(ok ? 'check' : 'cross', 'mark')}<span>${msg}</span>`;
   $('#check').hidden = true;
@@ -454,14 +522,15 @@ document.addEventListener('keydown', (e) => {
 
 // ---------- quiz ----------
 
-function quizTopics() {
+function quizTopics(scope = 'mixed') {
+  if (scope === 'abg') return ABG_IDS;
   const list = state.settings.quizTopics;
-  return list && list.length ? list : TOPIC_IDS;
+  return list && list.length ? list : DOSAGE_IDS;
 }
 
-function makeQuiz(problems = null, retry = false) {
+function makeQuiz(problems = null, retry = false, scope = 'mixed') {
   if (!problems) {
-    const ids = [...quizTopics()];
+    const ids = [...quizTopics(scope)];
     const rng = seeded(randomSeed());
     const order = [];
     while (order.length < 10) {
@@ -477,12 +546,13 @@ function makeQuiz(problems = null, retry = false) {
       return p;
     });
   }
-  state.quiz = { problems, i: 0, answers: [], done: false, retry };
+  state.quiz = { problems, i: 0, answers: [], done: false, retry, scope };
 }
 
-function showQuiz() {
-  if (!state.quiz) makeQuiz();
-  setTitle(state.quiz.retry ? 'Retry the misses' : 'Mixed quiz');
+const quizName = (q) => (q.retry ? 'Retry the misses' : q.scope === 'abg' ? 'Blood gas quiz' : 'Mixed quiz');
+function showQuiz(scope = 'mixed') {
+  if (!state.quiz || state.quiz.scope !== scope) makeQuiz(null, false, scope);
+  setTitle(quizName(state.quiz));
   if (state.quiz.done) renderResults(); else renderQuizQuestion();
   focusHeading();
 }
@@ -492,7 +562,7 @@ function renderQuizQuestion() {
   view.innerHTML = `
     <nav class="crumbs"><a href="#/">${icon('back')}All topics</a></nav>
     <header class="screen-head">
-      <div><h1>${qz.retry ? 'Retry the misses' : 'Mixed quiz'}</h1><p class="sub">Problem ${qz.i + 1} of ${qz.problems.length}. You’ll see how you did at the end.</p></div>
+      <div><h1>${quizName(qz)}</h1><p class="sub">Problem ${qz.i + 1} of ${qz.problems.length}. You’ll see how you did at the end.</p></div>
     </header>
     <ol class="punches" aria-hidden="true">${qz.problems.map((_, i) => `<li class="${i < qz.i ? 'done' : i === qz.i ? 'now' : ''}"></li>`).join('')}</ol>
     <div class="quiz-card">${slipHTML(p, { mode: 'quiz' })}</div>`;
@@ -515,7 +585,7 @@ function renderQuizQuestion() {
   };
   form.addEventListener('submit', (e) => { e.preventDefault(); go(false); });
   $('#skip').addEventListener('click', () => go(true));
-  if (p.answer.type === 'choice') bindChoices();
+  if (p.answer.type === 'choice' || p.answer.type === 'abg') bindChoices(p);
   if (p.answer.type === 'duration') {
     $('#ans').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !$('#ans-m').value) { e.preventDefault(); $('#ans-m').focus(); } });
   }
@@ -562,8 +632,8 @@ function renderResults() {
         </li>`;
       }).join('')}
     </ol>`;
-  $('#retry')?.addEventListener('click', () => { makeQuiz(misses, true); renderQuizQuestion(); focusHeading(); window.scrollTo(0, 0); });
-  $('#newquiz').addEventListener('click', () => { makeQuiz(); renderQuizQuestion(); focusHeading(); window.scrollTo(0, 0); });
+  $('#retry')?.addEventListener('click', () => { makeQuiz(misses, true, qz.scope); renderQuizQuestion(); focusHeading(); window.scrollTo(0, 0); });
+  $('#newquiz').addEventListener('click', () => { makeQuiz(null, false, qz.scope); renderQuizQuestion(); focusHeading(); window.scrollTo(0, 0); });
   $$('.review-show').forEach((b) => b.addEventListener('click', () => {
     const li = b.closest('.review-item');
     const box = $('.review-steps', li);
@@ -586,7 +656,7 @@ function showFormulas() {
   view.innerHTML = `
     <nav class="crumbs"><a href="#/">${icon('back')}All topics</a></nav>
     <header class="screen-head">
-      <div><h1>Formula sheet</h1><p class="sub">Everything on one card. It prints on two pages.</p></div>
+      <div><h1>Formula sheet</h1><p class="sub">Everything on one card, dosage and blood gases. It prints on a few pages.</p></div>
       <button type="button" class="btn" id="print">${icon('print')}Print</button>
     </header>
     <div class="sheet">
@@ -679,6 +749,51 @@ function showFormulas() {
         </ul>
         <p>Round half up (31.25 → 31, 62.5 → 63), and only at the end unless a step says so.</p>
       </section>
+      <section class="card wide abg-card">
+        <h2>Blood gases: normal ranges</h2>
+        <div class="ranges big">${RANGE_TEXT.map(([k, v]) => `<span><b>${k}</b> ${v}</span>`).join('')}</div>
+        <p class="small">${esc(VARY)}</p>
+      </section>
+      <section class="card">
+        <h2>Reading an ABG</h2>
+        <ol class="plain">
+          <li><b>pH:</b> under 7.35 is acidosis, over 7.45 alkalosis.</li>
+          <li><b>PaCO2</b> acts like an acid (high = acid), <b>HCO3</b> like a base (low = acid).</li>
+          <li><b>Tic-tac-toe:</b> put all three in Acid, Normal or Base. The one in the pH’s column is the cause. Three in a row is mixed.</li>
+          <li><b>ROME:</b> Respiratory Opposite (pH and PaCO2), Metabolic Equal (pH and HCO3).</li>
+          <li><b>Compensation:</b> the other value normal is uncompensated; moved the other way with the pH still out is partial; pH back in range is full (its side of 7.40 tells you the cause).</li>
+        </ol>
+      </section>
+      <section class="card">
+        <h2>Henderson-Hasselbalch</h2>
+        <p class="eq">pH = 6.1 + log10 ${fr('HCO3', '0.03 × PaCO2')}</p>
+        <p>HCO3 24 and PaCO2 40 give a ratio of 20 to 1, and 6.1 + log10(20) = 7.40. A lower ratio is more acidic.</p>
+      </section>
+      <section class="card">
+        <h2>Expected compensation</h2>
+        <ul class="plain">
+          <li>Metabolic acidosis (Winters’): PaCO2 = 1.5 × HCO3 + 8, ±2</li>
+          <li>Metabolic alkalosis: PaCO2 = 40 + 0.7 × (HCO3 − 24), ±2</li>
+          <li>Respiratory acidosis: HCO3 up about 1 (acute) or 3.5 (chronic) per 10 mmHg PaCO2 above 40</li>
+          <li>Respiratory alkalosis: HCO3 down about 2 (acute) or 4 (chronic) per 10 mmHg PaCO2 below 40</li>
+        </ul>
+        <p>Outside the expected range means a second disorder. Sources differ a little on these numbers.</p>
+      </section>
+      <section class="card">
+        <h2>Anion gap</h2>
+        <p class="eq">AG = Na − (Cl + HCO3)</p>
+        <p class="eq">corrected = AG + 2.5 × (4 − albumin g/dL)</p>
+        <p>Normal is about 8 to 12 mEq/L, and labs vary.</p>
+      </section>
+      <section class="card">
+        <h2>Oxygenation</h2>
+        <p class="eq">P/F = ${fr('PaO2', 'FiO2 (a fraction)')}</p>
+        <p>PaO2 80–100 mmHg and SaO2 95–100% are normal. FiO2 40% goes in as 0.40. On room air a healthy P/F is about 400 to 500; 300 or less is one of the Berlin criteria for ARDS.</p>
+      </section>
+      <section class="card wide">
+        <h2>Plain words, for patients</h2>
+        <dl class="glossary cols">${GLOSSARY.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>
+      </section>
       <section class="card wide">
         <h2>Writing numbers</h2>
         <p>Always a leading zero: <b>0.5</b> mg, never .5 mg. Never a trailing zero: <b>5</b> mg, never 5.0 mg. Both mistakes can be misread as ten times the dose.</p>
@@ -726,9 +841,13 @@ function showSettings() {
       </section>
       <section class="card">
         <h2>Topics in the mixed quiz</h2>
-        <div class="checks">
-          ${TOPICS.map((t) => `<label class="check"><input type="checkbox" name="qt" value="${t.id}" ${chosen.has(t.id) ? 'checked' : ''}><span>${esc(t.name)}</span></label>`).join('')}
-        </div>
+        <p class="help">Blood gases also have a quiz of their own on the home screen.</p>
+        ${GROUPS.map((g) => `<fieldset class="qt-group">
+          <legend><label class="check group"><input type="checkbox" name="qg" value="${g.id}"><span>${esc(g.name)}</span></label></legend>
+          <div class="checks">
+            ${g.topics.map((id) => `<label class="check"><input type="checkbox" name="qt" value="${id}" data-group="${g.id}" ${chosen.has(id) ? 'checked' : ''}><span>${esc(TOPIC[id].name)}</span></label>`).join('')}
+          </div>
+        </fieldset>`).join('')}
         <p class="help" id="qt-help">At least one has to stay on.</p>
       </section>
       <section class="card">
@@ -743,13 +862,32 @@ function showSettings() {
       </section>
     </form>`;
   const form = $('#settings');
+  const syncGroups = () => {
+    for (const box of $$('input[name=qg]', form)) {
+      const kids = $$(`input[name=qt][data-group="${box.value}"]`, form);
+      const n = kids.filter((k) => k.checked).length;
+      box.checked = n === kids.length;
+      box.indeterminate = n > 0 && n < kids.length;
+    }
+  };
+  syncGroups();
   form.addEventListener('change', (e) => {
     const t = e.target;
-    if (t.name === 'qt') {
+    if (t.name === 'qt' || t.name === 'qg') {
+      const before = $$('input[name=qt]', form).map((x) => x.checked);
+      if (t.name === 'qg') $$(`input[name=qt][data-group="${t.value}"]`, form).forEach((k) => { k.checked = t.checked; });
       const on = $$('input[name=qt]:checked', form).map((x) => x.value);
-      if (!on.length) { t.checked = true; $('#qt-help').classList.add('warn'); return; }
+      if (!on.length) {
+        $$('input[name=qt]', form).forEach((x, i) => { x.checked = before[i]; });
+        if (t.name === 'qt') t.checked = true;
+        syncGroups();
+        $('#qt-help').classList.add('warn');
+        return;
+      }
+      syncGroups();
       $('#qt-help').classList.remove('warn');
-      state.settings.quizTopics = on.length === TOPIC_IDS.length ? null : on;
+      const same = on.length === DOSAGE_IDS.length && DOSAGE_IDS.every((id) => on.includes(id));
+      state.settings.quizTopics = same ? null : on;
     } else if (t.type === 'radio') {
       state.settings[t.name] = t.value;
       if (t.name === 'theme') applyTheme();

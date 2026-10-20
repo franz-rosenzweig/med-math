@@ -5,7 +5,7 @@
 import { Q } from './frac.js';
 import { fmt, fmtApprox, unitText, unitsText } from './fmt.js';
 import { solve } from './train.js';
-import { amountText } from './topics.js';
+import { amountText } from './kit.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const FONT = '"Atkinson Hyperlegible", system-ui, sans-serif';
@@ -65,7 +65,7 @@ export function trainSpeech(train) {
 function resultText(train) {
   const unit = train.unit;
   if (unit === 'tab' || unit === 'cap') return amountText(train.key, unit);
-  return `${val(train.key)} ${unit}`;
+  return `${val(train.key)} ${unit}`.trim();
 }
 
 // Build the SVG. opts: { width, animate }. Returns { svg, duration } (duration in ms of the animation).
@@ -75,7 +75,7 @@ export function drawTrain(train, { width = 640, animate = false, engineOnly = fa
   sol.strikes.forEach((s) => { struck.add(`${s.a.car}:n:${s.a.idx}`); struck.add(`${s.b.car}:d:${s.b.idx}`); });
 
   // --- sizes ---
-  const wantText = '? ' + (train.unit || unitsText(train.want.n, train.want.d));
+  const wantText = '? ' + (train.engine || train.unit || unitsText(train.want.n, train.want.d));
   const engineW = Math.max(108, measure(wantText, true) + 62);
   const cars = train.cars.map((c) => {
     const n = lineParts(c.n);

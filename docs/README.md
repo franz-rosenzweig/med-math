@@ -1,6 +1,6 @@
 <p align="center"><img src="../app/icon-512.png" width="72" alt=""></p>
 <h1 align="center">Med Math docs</h1>
-<p align="center">Dosage calculation practice where every answer is worked out as a train of fractions.</p>
+<p align="center">Dosage calculation and blood gas practice, where every answer is worked out step by step.</p>
 
 These pages explain Med Math the way I'd explain it to a friend sitting next to me before an exam: what each screen
 is for, what counts as a right answer, and how the train in "Show me" works. If you're new, read "What is Med Math?"
@@ -16,9 +16,12 @@ is for changing Med Math itself, and you only need it if you're working on the c
 - [How the train works](the-train.md) — the engine, the cars, the struck-out units, the caboose, rounding, and the formula way
 - [The quiz and the formula sheet](quiz-and-formulas.md) — a mixed quiz of 10, the results, retrying the misses, and printing the sheet
 
+### Blood gases
+- [Blood gases](blood-gases.md) — reading an ABG with ROME and tic-tac-toe, oxygen and the P/F ratio, Henderson-Hasselbalch, expected compensation, the anion gap, explaining it to patients, and the sources
+
 ### Reference
-- [The 14 topics](topics.md) — what each topic asks, with an example and the rounding it uses
-- [Settings](settings.md) — rounding, pounds and kilograms, the clock, quiz topics, the look, and resetting progress
+- [The 14 topics](topics.md) — what each dosage topic asks, with an example and the rounding it uses
+- [Settings](settings.md) — rounding, pounds and kilograms, the clock, which topics go in the quiz, the look, and resetting progress
 
 ### Under the hood
 - [Developing](DEVELOPING.md) — the files, the two ways every answer is worked out, the tests, the walk and deploying

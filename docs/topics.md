@@ -2,7 +2,8 @@
 
 # The 14 topics
 
-This is the list of every topic, what kind of problem it makes, an example, and how its answer is rounded. The
+This is the list of every dosage topic, what kind of problem it makes, an example, and how its answer is rounded.
+The six blood gas topics are on their own page, [Blood gases](blood-gases.md). The
 rounding rules marked "(setting)" can be changed in [Settings](settings.md), and everything rounds half up, so 31.25
 becomes 31 and 62.5 becomes 63.
 

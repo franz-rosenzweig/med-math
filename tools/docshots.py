@@ -19,7 +19,8 @@ OUT.mkdir(parents=True, exist_ok=True)
 
 DEMO_PROGRESS = """(() => {
   const t = { metric: [9, 10], household: [7, 8], tablets: [12, 12], liquids: [10, 12], injections: [8, 10], recon: [4, 6],
-    weight: [7, 10], safe: [5, 6], bsa: [2, 4], pump: [9, 10], drip: [6, 9], time: [3, 5], heparin: [4, 6], titration: [2, 5] };
+    weight: [7, 10], safe: [5, 6], bsa: [2, 4], pump: [9, 10], drip: [6, 9], time: [3, 5], heparin: [4, 6], titration: [2, 5],
+    abg: [11, 14], oxygen: [5, 6], hh: [3, 4], comp: [4, 7], gap: [6, 7], talk: [8, 9] };
   const ids = Object.keys(t), recent = [];
   for (let i = 0; i < 43; i++) recent.push({ topic: ids[(i * 5) % ids.length], ok: ![3, 11, 17, 26, 31, 38].includes(i), at: Date.now() - (43 - i) * 60000 });
   const topics = Object.fromEntries(ids.map((k) => [k, { right: t[k][0], total: t[k][1] }]));
@@ -27,6 +28,7 @@ DEMO_PROGRESS = """(() => {
   localStorage.removeItem('med-math:settings:v1');
 })()"""
 
+ABG_SEEDS = {"abg": 33, "hh": 22, "comp": 8, "gap": 20, "oxygen": 48, "talk": 1}
 SEEDS = {"liquids": 2931, "drip": 60, "weight": 18, "titration": 23, "safe": 8, "recon": 7, "heparin": 30, "time": 5, "bsa": 6}
 
 
@@ -82,6 +84,14 @@ def run(b, mobile=False, dark=False):
         go("practice/liquids", seed=SEEDS["liquids"])
         key("10")
         save(f"phone-practice-{t}.png")
+        if not dark:
+            go("practice/abg", seed=ABG_SEEDS["abg"])
+            for g, v in (("s", "acid"), ("k", "met"), ("c", "partial")):
+                b.js(f"document.querySelector('[data-group=\"{g}\"] .choice[data-id=\"{v}\"]').click()")
+            b.js("document.querySelector('#check').click()")
+            save("phone-abg-light.png")
+            go("practice/liquids", seed=SEEDS["liquids"])
+            key("10")
         showme()
         b.js("document.querySelector('#showme-panel').scrollIntoView({block: 'start'}); window.scrollBy(0, -8)")
         save(f"phone-showme-{t}.png")
@@ -134,7 +144,26 @@ def run(b, mobile=False, dark=False):
     b.js("document.querySelector('.review-item.miss .review-show').click()")
     b.pump(10)
     clip(".review-item.miss", "quiz-review.png")
+    # ---------- blood gases ----------
+    go("practice/abg", seed=ABG_SEEDS["abg"])
+    for g, v in (("s", "acid"), ("k", "met"), ("c", "partial")):
+        b.js(f"document.querySelector('[data-group=\"{g}\"] .choice[data-id=\"{v}\"]').click()")
+    b.js("document.querySelector('#check').click()")
+    showme()
+    clip(".practice", "abg-read.png")
+    for topic, name in (("hh", "hh-train.png"), ("comp", "comp-range.png"), ("gap", "gap-figure.png"), ("oxygen", "pf-train.png")):
+        go(f"practice/{topic}", seed=ABG_SEEDS[topic])
+        showme()
+        clip(".practice" if topic == "comp" else "#showme-panel", name)
+    go("practice/talk", seed=ABG_SEEDS["talk"])
+    clip(".slip", "talk-question.png")
+    b.js("document.querySelector('.choice[data-id=\"b\"]').click(); document.querySelector('#check').click()")
+    b.pump(0.3)
+    clip(".slip", "talk-feedback.png")
+    showme()
+    clip("#showme-panel", "talk-review.png")
     go("formulas", wait=1.5)
+    clip(".abg-card", "formula-abg-ranges.png")
     save("formula-sheet.png", full=True)
     go("settings")
     save("settings.png", full=True)

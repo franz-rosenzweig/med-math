@@ -97,6 +97,27 @@ export class Q {
     return new Q(k, 1n).mul(step);
   }
 
+  // offset + log10(this), rounded half up to p decimal places, decided exactly with whole numbers
+  // (no floating point in the decision). Used for Henderson-Hasselbalch: 6.1 + log10(HCO3 / (0.03 × PaCO2)).
+  offsetLog10Round(offset, p) {
+    offset = Q.of(offset);
+    if (this.n <= 0n) throw new Error('log10 of a number that is not positive');
+    const P = 10n ** BigInt(p);
+    // is offset + log10(R) ≥ a/b ?  ⇔  log10(R) ≥ E/D  ⇔  R^D ≥ 10^E, with E/D = a/b − offset
+    const atLeast = (a, b) => {
+      const e = new Q(a, b).sub(offset);
+      const E = e.n, D = e.d;
+      const lhs = this.n ** D, rhs = this.d ** D;
+      return E >= 0n ? lhs >= rhs * 10n ** E : lhs * 10n ** -E >= rhs;
+    };
+    const est = offset.toNumber() + Math.log10(this.toNumber());
+    let k = BigInt(Math.round(est * Number(P)));
+    // the value rounds to k when it is ≥ (2k − 1) / 2P and < (2k + 1) / 2P
+    while (!atLeast(2n * k - 1n, 2n * P)) k -= 1n;
+    while (atLeast(2n * k + 1n, 2n * P)) k += 1n;
+    return new Q(k, P);
+  }
+
   // Fixed decimal string with exactly p places (rounds half up first if needed).
   toFixedString(p) {
     const r = this.roundPlaces(p);

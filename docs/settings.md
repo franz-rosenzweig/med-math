@@ -34,8 +34,10 @@ rounded before they're used.
 
 ## Topics in the mixed quiz
 
-All 14 are on to start with. Turn off the ones you don't need yet, and the next quiz only uses the ones that are on.
-At least one has to stay on.
+The topics are listed in their groups, the same as on the home screen. The 14 dosage topics are on to start with and
+the six blood gas topics are off, because they have a **Blood gas quiz** of their own. Tick a group's name to turn the
+whole group on or off, or pick topics one by one, and the next mixed quiz only uses the ones that are on. At least one
+has to stay on.
 
 ## Look
 

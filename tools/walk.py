@@ -94,7 +94,7 @@ def right_answer(p):
 try:
     # ---------- home ----------
     open_("", wait=3.5)
-    check(b.js("document.querySelectorAll('.station').length") == 14, "home lists 14 topics")
+    check(b.js("document.querySelectorAll('.line-grid .station').length") == 14, "home lists the 14 dosage topics")
     check(b.js("!!document.querySelector('#hero-fig svg.train')"), "home draws the example train")
     shot("home", full=MOBILE)
 
@@ -164,6 +164,75 @@ try:
     enter()
     check("right" in b.js("document.querySelector('#feedback').className"), f"time: the clock answer {right_answer(p)} counts")
     shot("time")
+
+    # ---------- blood gases ----------
+    def answer_abg(key):
+        d, c = key["d"], key["c"]
+        if d == "normal":
+            picks = [("s", "normal")]
+        else:
+            kind, tail = d.split("-")
+            picks = [("s", tail), ("k", kind)]
+            if c != "none":
+                picks.append(("c", c))
+        for g, v in picks:
+            b.js(f"document.querySelector('[data-group=\"{g}\"] .choice[data-id=\"{v}\"]').click()")
+
+    open_("", wait=1.5)
+    check(b.js("document.querySelectorAll('.abg-stations .station').length") == 6, "home lists the 6 blood gas topics")
+    open_("practice/abg", seed=3)
+    check(b.js("!!document.querySelector('.ranges')"), "an ABG problem shows the normal ranges")
+    key = b.js("window.__medmath.state.practice.problem.answer.key")
+    b.js("document.querySelector('[data-group=\"s\"] .choice[data-id=\"normal\"]').click()")
+    check(b.js("document.querySelector('[data-group=\"c\"] .choice').disabled"), "picking Normal turns off cause and compensation")
+    answer_abg(key)
+    b.js("document.querySelector('#check').click()")
+    b.pump(0.3)
+    check("right" in b.js("document.querySelector('#feedback').className"), f"reading the ABG as {key['d']} / {key['c']} counts")
+    b.js("document.querySelector('#showme').click()")
+    check(wait_showme(), "ABG: Show me finishes")
+    check(b.js("!!document.querySelector('#showme-body svg.ttt')"), "ABG: Show me draws the tic-tac-toe grid")
+    shot("abg-showme", full=MOBILE)
+
+    open_("practice/talk", seed=2)
+    check(b.js("document.querySelectorAll('.glossary dt').length") == 7, "Talk it through shows the plain-words glossary")
+    best = b.js("window.__medmath.state.practice.problem.answer.key")
+    other = b.js(f"[...document.querySelectorAll('.choice')].map(c => c.dataset.id).find(id => id !== '{best}')")
+    b.js(f"document.querySelector('.choice[data-id=\"{other}\"]').click(); document.querySelector('#check').click()")
+    b.pump(0.3)
+    fb = b.js("document.querySelector('#feedback').textContent")
+    check("Not the best one" in fb and len(fb) > 40, "a weaker answer says why it's weaker")
+    b.js("document.querySelector('#showme').click()")
+    check(wait_showme(), "talk: Show me finishes")
+    check(b.js("document.querySelectorAll('.talk-review li').length") >= 3 and b.js("document.querySelectorAll('.talk-review li.best').length") == 1, "talk: every option is explained, one marked best")
+    shot("talk-showme", full=MOBILE)
+
+    for topic, seed in (("gap", 4), ("hh", 5), ("comp", 6), ("oxygen", 7)):
+        open_(f"practice/{topic}", seed=seed)
+        b.js("document.querySelector('#showme').click()")
+        check(wait_showme(), f"{topic}: Show me finishes")
+        shot(f"{topic}-showme", full=MOBILE)
+
+    open_("quiz/abg", seed=77)
+    check(b.js("document.querySelector('h1').textContent") == "Blood gas quiz", "the blood gas quiz opens")
+    for i in range(10):
+        a = b.js("""(() => { const q = window.__medmath.state.quiz; const p = q.problems[q.i]; const a = p.answer;
+          return { topic: p.topic, type: a.type, key: a.type === 'number' ? a.key.toFixedString(6).replace(/\\.?0+$/, '') : a.key }; })()""")
+        check(a["topic"] in ("abg", "oxygen", "hh", "comp", "gap", "talk"), f"blood gas quiz problem {i + 1} is a blood gas topic ({a['topic']})")
+        if i == 4:
+            b.js("document.querySelector('#skip').click()")
+        elif a["type"] == "abg":
+            answer_abg(a["key"])
+            b.js("document.querySelector('#qnext').click()")
+        elif a["type"] == "choice":
+            b.js(f"document.querySelector('.choice[data-id=\"{a['key']}\"]').click(); document.querySelector('#qnext').click()")
+        else:
+            type_(a["key"])
+            enter()
+        b.pump(0.3)
+    score = b.js("document.querySelector('.score-num')?.textContent")
+    check(score == "9/10", f"blood gas quiz score shows 9/10 ({score})")
+    shot("abg-quiz-results", full=True)
 
     # ---------- quiz ----------
     open_("quiz", seed=99)

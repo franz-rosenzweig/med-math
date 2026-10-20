@@ -2,29 +2,15 @@
 // real order, and works the answer out as a fraction train (exactly, see frac.js) with the rounding
 // rule applied. formulas.js checks every answer a second way, with plain formulas.
 import { Q } from './frac.js';
-import { car, load, makeTrain, runTrain } from './train.js';
-import { applyRule, ruleText, ruleStep, lbFactor, DEFAULT_SETTINGS } from './rules.js';
-import { fmt, fmtApprox, fmtClock, fmtDuration, unitsText } from './fmt.js';
+import { car, load, makeTrain } from './train.js';
+import { applyRule, ruleStep, lbFactor, DEFAULT_SETTINGS } from './rules.js';
+import { fmt, fmtApprox, fmtClock, fmtDuration } from './fmt.js';
+import { pick, int, chance, steps, placesOf, num, UNIT_WORD, amountText, T, roundingSay, numberAnswer } from './kit.js';
+import { ABG_TOPICS } from './abg.js';
+export { pick, amountText };
 
-// ---------- small helpers ----------
+// ---------- dose helpers ----------
 
-export const pick = (rng, a) => a[Math.floor(rng() * a.length)];
-const int = (rng, lo, hi) => lo + Math.floor(rng() * (hi - lo + 1));
-const chance = (rng, p) => rng() < p;
-function steps(lo, hi, step) {
-  const out = [];
-  const n = Math.round((hi - lo) / step);
-  for (let i = 0; i <= n; i++) out.push(Number((lo + i * step).toFixed(6)));
-  return out;
-}
-const placesOf = (x) => Q.of(x).places(8);
-// An exact Q as a plain JS number (only for exact short decimals).
-function num(x) {
-  const v = Q.of(x);
-  const p = v.places(8);
-  if (p < 0) return null;
-  return Number(v.toFixedString(p));
-}
 // Does this look like an amount someone would really order?
 function niceDose(x) {
   if (x == null || !(x > 0)) return false;
@@ -41,51 +27,6 @@ function roundDose(x) {
   if (!niceDose(x)) return false;
   const grid = x >= 100 ? 25 : x >= 20 ? 5 : x >= 5 ? 2.5 : x >= 2 ? 0.5 : x >= 0.2 ? 0.05 : 0.005;
   return Q.of(x).div(String(grid)).isInt();
-}
-
-const UNIT_WORD = { tab: ['tablet', 'tablets'], cap: ['capsule', 'capsules'] };
-// "0.5 tablet", "2 tablets", "10 mL"
-export function amountText(value, unit) {
-  const w = UNIT_WORD[unit];
-  const t = fmt(value);
-  if (!w) return `${t} ${unit}`;
-  return `${t} ${Q.of(value).gt(1) ? w[1] : w[0]}`;
-}
-
-// Build a train, multiply it out, and refuse to go on if the units don't cancel to what we want.
-function T(want, cars, rule, s, extra = {}) {
-  const train = makeTrain(want, cars, extra);
-  const r = runTrain(train);
-  if (!r.unitsOk) throw new Error(`Units don't cancel to ${unitsText(train.want.n, train.want.d)}`);
-  train.exact = r.value;
-  train.rule = rule || 'exact';
-  train.key = rule ? applyRule(rule, r.value, s) : r.value;
-  train.unit = unitsText(train.want.n, train.want.d);
-  return train;
-}
-
-// Decimal places to show an unrounded value with: two more than the rounding step uses.
-function showPlaces(rule, exact, s) {
-  const step = ruleStep(rule, exact, s);
-  return step ? step.places(4) + 1 : 4;
-}
-// "31.25 gtt/min, which rounds to whole drops: 31 gtt/min."
-function roundingSay(exact, key, rule, s, unit) {
-  const words = UNIT_WORD[unit];
-  if (rule === 'exact' || exact.eq(key)) return `That comes out even: **${words ? amountText(key, unit) : `${fmt(key)} ${unit}`}**.`;
-  const p = showPlaces(rule, exact, s);
-  const a = exact.terminatesWithin(p + 1) ? { text: fmt(exact), approx: false } : fmtApprox(exact, p);
-  return `That’s ${a.approx ? 'about ' : ''}${a.text} ${words ? words[1] : unit}, rounded ${ruleText(rule, exact, s)}: **${words ? amountText(key, unit) : `${fmt(key)} ${unit}`}**.`;
-}
-
-function numberAnswer({ exact, rule, unit, s, alts = [], sqrtOf = null }) {
-  const key = sqrtOf ? sqrtOf.sqrtRoundTo(ruleStep(rule, Q.of(1), s)) : applyRule(rule, exact, s);
-  const altKeys = [];
-  for (const a of alts) {
-    const k = applyRule(rule, a, s);
-    if (!k.eq(key) && !altKeys.some((x) => x.eq(k))) altKeys.push(k);
-  }
-  return { type: 'number', exact, sqrtOf, key, rule, unit, alts: altKeys, ruleText: ruleText(rule, exact, s) };
 }
 
 // Mass and volume conversion cars that turn `from` into `to`, wanted unit first.
@@ -1108,6 +1049,7 @@ export const TOPICS = [
   { ...time, name: 'Infusion time', hint: 'how long, and when it ends' },
   { ...heparin, name: 'Heparin', hint: 'units/h and mL/h' },
   { ...titration, name: 'Titrations', hint: 'mcg/kg/min and mcg/min' },
+  ...ABG_TOPICS,
 ];
 export const TOPIC = Object.fromEntries(TOPICS.map((t) => [t.id, t]));
 
@@ -1116,7 +1058,11 @@ export const GROUPS = [
   { id: 'oral', name: 'Tablets, liquids and shots', topics: ['tablets', 'liquids', 'injections', 'recon'] },
   { id: 'weight', name: 'By weight', topics: ['weight', 'safe', 'bsa'] },
   { id: 'iv', name: 'IV lines', topics: ['pump', 'drip', 'time', 'heparin', 'titration'] },
+  { id: 'abg', name: 'Blood gases', topics: ABG_TOPICS.map((t) => t.id) },
 ];
+export const ABG_IDS = ABG_TOPICS.map((t) => t.id);
+// The mixed quiz uses the dosage topics unless Settings says otherwise.
+export const DOSAGE_IDS = TOPICS.map((t) => t.id).filter((id) => !ABG_IDS.includes(id));
 
 // Make a whole problem from a topic's numbers.
 export function buildProblem(topicId, given, settings = DEFAULT_SETTINGS) {

@@ -66,6 +66,13 @@ function withinHalfStep(x, answer, step) {
 // note 'alt' means another accepted way of working it (like not rounding the weight first).
 export function judge(problem, input, settings) {
   const a = problem.answer;
+  if (a.type === 'abg') {
+    const d = input?.d, c = input?.c;
+    const needC = !a.noComp.includes(a.key.d);
+    if (!d || (needC && !a.noComp.includes(d) && !c)) return { state: 'empty' };
+    if (d !== a.key.d) return { state: 'wrong' };
+    return { state: !needC || c === a.key.c ? 'right' : 'wrong' };
+  }
   if (a.type === 'choice') {
     if (!input) return { state: 'empty' };
     return { state: input === a.key ? 'right' : 'wrong' };
