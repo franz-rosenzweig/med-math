@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="icon" href="data:,">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Med Math tests</title>
+<style>
+  body { font: 14px/1.4 system-ui, sans-serif; margin: 24px; color: #222; background: #fff; }
+  table { border-collapse: collapse; } td, th { border: 1px solid #ccc; padding: 2px 8px; text-align: left; }
+  .bad { color: #a00; } pre { white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<div id="out">Running…</div>
+<script type="module">
+  import('./tests.js').catch((e) => {
+    window.__report = { ok: false, checks: 0, failures: ['tests.js did not load: ' + (e && e.stack || e)], failureCount: 1, summary: [], log: [] };
+    document.getElementById('out').textContent = String(e && e.stack || e);
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#2F7D8C" stroke-opacity=".16" stroke-width="2"/>
+    </pattern>
+    <clipPath id="tile"><rect width="512" height="512" rx="112"/></clipPath>
+  </defs>
+  <g clip-path="url(#tile)">
+    <rect width="512" height="512" fill="#F6F4EC"/>
+    <rect width="512" height="512" fill="url(#grid)"/>
+  </g>
+  <g id="art">
+    <rect x="92" y="122" width="328" height="208" rx="26" fill="#FFFDF7" stroke="#3D4045" stroke-width="14"/>
+    <path d="M146 160 L368 152 L370 212 L148 220 Z" fill="#F6E05C"/>
+    <rect x="166" y="166" width="180" height="36" rx="18" fill="#2F7D8C"/>
+    <line x1="136" y1="234" x2="376" y2="234" stroke="#3D4045" stroke-width="12" stroke-linecap="round"/>
+    <rect x="166" y="262" width="180" height="36" rx="18" fill="#A3A6A9"/>
+    <line x1="150" y1="310" x2="362" y2="250" stroke="#3D4045" stroke-width="13" stroke-linecap="round"/>
+    <line x1="56" y1="404" x2="456" y2="404" stroke="#7E8287" stroke-width="12" stroke-linecap="round"/>
+    <circle cx="164" cy="356" r="31" fill="#FFFDF7" stroke="#3D4045" stroke-width="14"/>
+    <circle cx="348" cy="356" r="31" fill="#FFFDF7" stroke="#3D4045" stroke-width="14"/>
+    <circle cx="164" cy="356" r="7" fill="#3D4045"/>
+    <circle cx="348" cy="356" r="7" fill="#3D4045"/>
+  </g>
+</svg>

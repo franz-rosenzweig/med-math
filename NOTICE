@@ -1,0 +1,17 @@
+Med Math
+Copyright (c) 2026 franz-rosenzweig, MIT License (see LICENSE).
+
+It bundles these fonts, each under its own licence, with the licence files in app/fonts/:
+
+- Atkinson Hyperlegible, Copyright 2020 Braille Institute of America, Inc.
+  SIL Open Font License 1.1 (app/fonts/OFL-atkinsonhyperlegible.txt)
+- Caveat, Copyright 2014 The Caveat Project Authors (https://github.com/googlefonts/caveat)
+  SIL Open Font License 1.1 (app/fonts/OFL-caveat.txt)
+
+The fonts are the latin and latin-ext subsets as served by Google Fonts, unchanged.
+
+The body surface area formula is Mosteller's: R. D. Mosteller, "Simplified calculation of
+body-surface area", New England Journal of Medicine 317 (1987), p. 1098.
+
+Drug names are generic names used for realism. All doses, strengths and safe ranges in the
+problems are practice numbers, not dosing information.
